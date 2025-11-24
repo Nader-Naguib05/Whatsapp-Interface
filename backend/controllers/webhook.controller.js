@@ -10,11 +10,10 @@ import { findOrCreateConversationByPhone } from '../utils/helpers.js';
 const VERIFY_TOKEN = process.env.VERIFY_TOKEN;
 
 export async function verifyWebhook(req, res) {
-  const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
 
-  if (mode === 'subscribe' && token === VERIFY_TOKEN) {
+  if (token === VERIFY_TOKEN) {
     console.log('WEBHOOK_VERIFIED');
     return res.status(200).send(challenge);
   }
