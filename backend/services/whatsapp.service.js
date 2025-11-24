@@ -104,26 +104,45 @@ export async function markAsRead(messageId) {
 // ---------- PARSE INCOMING ----------
 export function parseIncoming(body) {
   const entry = body.entry?.[0];
-  if (!entry || !entry.changes) return [];
+  if (!entry?.changes) return [];
 
-  const messages = [];
+  const result = [];
+
   for (const change of entry.changes) {
     const value = change.value;
-    const msgs = value.messages || [];
-    for (const m of msgs) {
-      messages.push({
-        msgId: m.id,
-        from: m.from,
-        to: value.metadata.phone_number_id,
-        timestamp: m.timestamp,
-        type: m.type,
-        text: m.text?.body || null,
-        image: m.image?.link || null,
-        document: m.document?.filename || null,
-        raw: m
-      });
+
+    // 1. Incoming messages from customer
+    if (value.messages?.length) {
+      for (const m of value.messages) {
+        result.push({
+          event: "message",
+          msgId: m.id,
+          from: m.from,
+          to: value.metadata?.phone_number_id,
+          timestamp: m.timestamp,
+          type: m.type,
+          text: m.text?.body || null,
+          image: m.image?.link || null,
+          document: m.document?.filename || null,
+          raw: m
+        });
+      }
+    }
+
+    // 2. Status updates (delivered, read, failed...)
+    if (value.statuses?.length) {
+      for (const s of value.statuses) {
+        result.push({
+          event: "status",
+          status: s.status,
+          messageId: s.id,
+          timestamp: s.timestamp,
+          recipient: s.recipient_id,
+          raw: s
+        });
+      }
     }
   }
 
-  return messages;
+  return result;
 }
