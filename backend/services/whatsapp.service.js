@@ -106,43 +106,40 @@ export function parseIncoming(body) {
   const entry = body.entry?.[0];
   if (!entry?.changes) return [];
 
-  const result = [];
+  const out = [];
 
   for (const change of entry.changes) {
     const value = change.value;
 
-    // 1. Incoming messages from customer
-    if (value.messages?.length) {
+    // --- incoming messages ---
+    if (value.messages) {
       for (const m of value.messages) {
-        result.push({
+        out.push({
           event: "message",
           msgId: m.id,
           from: m.from,
           to: value.metadata?.phone_number_id,
           timestamp: m.timestamp,
           type: m.type,
-          text: m.text?.body || null,
-          image: m.image?.link || null,
-          document: m.document?.filename || null,
+          text: m.text?.body ?? null,
           raw: m
         });
       }
     }
 
-    // 2. Status updates (delivered, read, failed...)
-    if (value.statuses?.length) {
+    // --- delivery/read statuses ---
+    if (value.statuses) {
       for (const s of value.statuses) {
-        result.push({
+        out.push({
           event: "status",
           status: s.status,
           messageId: s.id,
           timestamp: s.timestamp,
-          recipient: s.recipient_id,
           raw: s
         });
       }
     }
   }
 
-  return result;
+  return out;
 }
