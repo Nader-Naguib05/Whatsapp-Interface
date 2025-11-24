@@ -24,8 +24,8 @@ export async function receiveWebhook(req, res) {
     try {
         console.log("RAW:", JSON.stringify(req.body, null, 2));
 
-        const parsed = parseIncoming(req.body);
-        console.log("PARSED:", parsed);
+        const parsedMessages = parseIncoming(req.body);
+        console.log("PARSED:", parsedMessages);
 
         if (!parsedMessages.length) return res.status(200).send("No messages");
 
