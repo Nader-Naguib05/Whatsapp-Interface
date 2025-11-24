@@ -1,5 +1,5 @@
 import './App.css'
-import WhatsAppDashboard from './components/WhatsappInbox.jsx'
+import WhatsAppDashboard from './pages/WhatsAppDashboard.jsx'
 
 function App() {
 
