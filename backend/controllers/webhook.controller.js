@@ -22,6 +22,7 @@ export async function verifyWebhook(req, res) {
 
 export async function receiveWebhook(req, res) {
   try {
+    console.log("reqbody:", req.body);
     const parsedMessages = parseIncoming(req.body);
     if (!parsedMessages.length) return res.status(200).send('No messages');
 
