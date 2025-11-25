@@ -21,57 +21,73 @@ export async function verifyWebhook(req, res) {
 }
 
 export async function receiveWebhook(req, res) {
-    try {
-        console.log("RAW:", JSON.stringify(req.body, null, 2));
+  try {
+    const events = parseIncoming(req.body);
 
-        const parsedMessages = parseIncoming(req.body);
-        console.log("PARSED:", parsedMessages);
+    if (!events.length) return res.sendStatus(200);
 
-        if (!parsedMessages.length) return res.status(200).send("No messages");
+    for (const ev of events) {
+        
+      // -------------------------------
+      // 🔵 CASE 1: User sent a message
+      // -------------------------------
+      if (ev.event === "message") {
+        if (!ev.text) continue; // ignore empty payloads
 
-        for (const m of parsedMessages) {
-            // create conversation (or find)
-            const conv = await findOrCreateConversationByPhone(m.from);
+        const conv = await findOrCreateConversationByPhone(ev.from);
 
-            // create message doc
-            const messageDoc = new Message({
-                conversationId: conv._id,
-                from: m.from,
-                to: m.to,
-                senderType: "customer",
-                body: m.text || "",
-                meta: m.raw,
-                status: "received",
-                createdAt: new Date(Number(m.timestamp) * 1000),
-            });
+        const messageDoc = new Message({
+          conversationId: conv._id,
+          from: ev.from,
+          to: ev.to,
+          senderType: "customer",
+          body: ev.text,
+          status: "received",
+          createdAt: new Date(Number(ev.timestamp) * 1000),
+          raw: ev.raw
+        });
 
-            await messageDoc.save();
+        await messageDoc.save();
 
-            // update conversation
-            conv.lastMessage = m.text || "[media]";
-            conv.unreadCount = (conv.unreadCount || 0) + 1;
-            conv.updatedAt = new Date();
-            await conv.save();
+        conv.lastMessage = ev.text;
+        conv.unreadCount = (conv.unreadCount || 0) + 1;
+        conv.updatedAt = new Date();
+        await conv.save();
 
-            // emit to socket room
-            try {
-                getIO()
-                    .to(String(conv._id))
-                    .emit("newMessage", {
-                        conversation: conv,
-                        message: messageDoc,
-                    });
-            } catch (e) {
-                console.warn(
-                    "Socket emit failed (maybe not initialized)",
-                    e.message || e
-                );
-            }
-        }
+        getIO().to(String(conv._id)).emit("newMessage", {
+          conversation: conv,
+          message: messageDoc
+        });
 
-        return res.status(200).send("EVENT_RECEIVED");
-    } catch (err) {
-        console.error("Webhook receive error:", err);
-        return res.status(500).send("Server Error");
+        continue;
+      }
+
+      // -------------------------------
+      // 🟣 CASE 2: Read/Delivery status
+      // -------------------------------
+      if (ev.event === "status") {
+        // You choose how you want to use this:
+        
+        // Example: update message status in DB
+        await Message.updateOne(
+          { msgId: ev.messageId },
+          { status: ev.status }
+        );
+
+        // And optionally emit to frontend:
+        getIO().emit("messageStatusUpdate", {
+          messageId: ev.messageId,
+          status: ev.status
+        });
+
+        continue;
+      }
     }
+
+    return res.sendStatus(200);
+    
+  } catch (err) {
+    console.error("Webhook receive error:", err);
+    return res.sendStatus(500);
+  }
 }
