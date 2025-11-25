@@ -13,23 +13,23 @@ import BroadcastView from "../components/broadcast/BroadcastView";
 // Analytics
 import AnalyticsView from "../components/analytics/AnalyticsView";
 
+// Contacts
 import ContactsPage from "./ContactsPage";
 
 // Settings
 import SettingsView from "../components/settings/SettingsView";
 
-// Data
+// Data (only analytics/mock stats)
 import {
-    INITIAL_CONVERSATIONS,
-    ANALYTICS_STATS,
-    MESSAGE_VOLUME,
-    maxVolume,
+  ANALYTICS_STATS,
+  MESSAGE_VOLUME,
+  maxVolume,
 } from "../data/mockData";
 
 // API
 import {
-    getConversations,
-    getConversationMessages,
+  getConversations,
+  getConversationMessages,
 } from "../api/conversations";
 import { sendMessage } from "../api/messages";
 
@@ -37,262 +37,348 @@ import { sendMessage } from "../api/messages";
 import { createSocket } from "../lib/socket";
 
 const WhatsAppDashboard = () => {
-    const [activeTab, setActiveTab] = useState("chats");
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState("chats");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
-    const [conversations, setConversations] = useState(INITIAL_CONVERSATIONS);
-    const [selectedChatId, setSelectedChatId] = useState(
-        INITIAL_CONVERSATIONS[0]?.id ?? null
-    );
+  const [conversations, setConversations] = useState([]);
+  const [selectedChatId, setSelectedChatId] = useState(null);
 
-    const [message, setMessage] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
+  const [message, setMessage] = useState("");
+  const [searchQuery, setSearchQuery] = useState("");
 
-    const [socket, setSocket] = useState(null);
-    const prevChatRef = useRef(null);
+  const [socket, setSocket] = useState(null);
+  const prevChatRef = useRef(null);
 
-    // --------------------------------------
-    // SOCKET SETUP
-    // --------------------------------------
-    useEffect(() => {
-        const s = createSocket();
-        setSocket(s);
+  // --------------------------------------
+  // SOCKET SETUP
+  // --------------------------------------
+  useEffect(() => {
+    const s = createSocket();
+    setSocket(s);
 
-        s.on("connect", () => console.log("Socket connected:", s.id));
-        s.on("disconnect", () => console.log("Socket disconnected"));
+    s.on("connect", () => console.log("Socket connected:", s.id));
+    s.on("disconnect", () => console.log("Socket disconnected"));
 
-        return () => s.disconnect();
-    }, []);
+    return () => {
+      s.disconnect();
+    };
+  }, []);
 
-    // Join/leave conversation rooms
-    useEffect(() => {
-        if (!socket || !selectedChatId) return;
+  // Join/leave conversation rooms when selected chat changes
+  useEffect(() => {
+    if (!socket || !selectedChatId) return;
 
-        if (prevChatRef.current && prevChatRef.current !== selectedChatId) {
-            socket.emit("leaveConversation", prevChatRef.current);
-        }
+    // leave previous
+    if (prevChatRef.current && prevChatRef.current !== selectedChatId) {
+      socket.emit("leaveConversation", prevChatRef.current);
+    }
 
-        socket.emit("joinConversation", selectedChatId);
-        prevChatRef.current = selectedChatId;
-    }, [socket, selectedChatId]);
+    // join new
+    socket.emit("joinConversation", selectedChatId);
+    prevChatRef.current = selectedChatId;
+  }, [socket, selectedChatId]);
 
-    // Handle incoming messages (real-time)
-    useEffect(() => {
-        if (!socket) return;
+  // Handle incoming messages (real-time from backend via socket)
+  useEffect(() => {
+    if (!socket) return;
 
-        const handler = (msg) => {
-            setConversations((prev) =>
-                prev.map((c) =>
-                    c.id === msg.conversationId
-                        ? {
-                              ...c,
-                              lastMessage: msg.text,
-                              messages: [...c.messages, msg],
-                          }
-                        : c
-                )
-            );
-        };
+    const handler = ({ conversation, message: rawMessage }) => {
+      console.log("SOCKET newMessage:", { conversation, rawMessage });
 
-        socket.on("message:new", handler);
-        return () => socket.off("message:new", handler);
-    }, [socket]);
+      // Map backend messageDoc -> UI message shape
+      const uiMessage = {
+        id: rawMessage._id,
+        conversationId: rawMessage.conversationId,
+        text: rawMessage.body,
+        sender: rawMessage.senderType, // "customer" | "agent"
+        time: rawMessage.createdAt,
+        status: rawMessage.status,
+      };
 
-    // --------------------------------------
-    // BACKEND SYNC (FETCH DATA)
-    // --------------------------------------
+      setConversations((prev) => {
+        let exists = false;
 
-    // Fetch conversations on mount
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const data = await getConversations();
-                setConversations(data);
-            } catch (err) {
-                console.log("Using mock conversations due to API error");
-            }
-        };
-
-        load();
-    }, []);
-
-    // Fetch messages when selecting chat
-    useEffect(() => {
-        if (!selectedChatId) return;
-
-        const loadMessages = async () => {
-            try {
-                const msgs = await getConversationMessages(selectedChatId);
-
-                setConversations((prev) =>
-                    prev.map((c) =>
-                        c.id === selectedChatId ? { ...c, messages: msgs } : c
-                    )
-                );
-            } catch (err) {
-                console.log("Using mock messages due to API error");
-            }
-        };
-
-        loadMessages();
-    }, [selectedChatId]);
-
-    // --------------------------------------
-    // FILTER, SELECTED CHAT
-    // --------------------------------------
-
-    const selectedChat = useMemo(
-        () => conversations.find((c) => c.id === selectedChatId) || null,
-        [conversations, selectedChatId]
-    );
-
-    const filtered = useMemo(() => {
-        if (!searchQuery.trim()) return conversations;
-
-        const q = searchQuery.toLowerCase();
-
-        return conversations.filter(
-            (c) =>
-                c.name.toLowerCase().includes(q) ||
-                c.lastMessage?.toLowerCase().includes(q) ||
-                c.phone?.toLowerCase().includes(q)
-        );
-    }, [conversations, searchQuery]);
-
-    // --------------------------------------
-    // SEND MESSAGE
-    // --------------------------------------
-
-    const handleSend = async () => {
-        if (!message.trim() || !selectedChat) return;
-
-        const time = new Date().toLocaleTimeString([], {
-            hour: "2-digit",
-            minute: "2-digit",
+        const updated = prev.map((c) => {
+          if (String(c._id) === String(conversation._id)) {
+            exists = true;
+            return {
+              ...c,
+              lastMessage: uiMessage.text || c.lastMessage,
+              updatedAt: uiMessage.time || c.updatedAt,
+              messages: [...(c.messages || []), uiMessage],
+              // simple unread increment if not currently selected
+              unreadCount:
+                String(c._id) === String(selectedChatId)
+                  ? c.unreadCount || 0
+                  : (c.unreadCount || 0) + 1,
+            };
+          }
+          return c;
         });
 
-        const optimisticMessage = {
-            id: Date.now(),
-            conversationId: selectedChat.id,
-            text: message,
-            sender: "agent",
-            time,
-            status: "sending",
-        };
-
-        // Optimistic UI
-        setConversations((prev) =>
-            prev.map((c) =>
-                c.id === selectedChat.id
-                    ? { ...c, messages: [...c.messages, optimisticMessage] }
-                    : c
-            )
-        );
-
-        const currentChatId = selectedChat.id;
-
-        setMessage("");
-
-        try {
-            const saved = await sendMessage(currentChatId, message);
-
-            // Replace optimistic message
-            setConversations((prev) =>
-                prev.map((c) =>
-                    c.id === currentChatId
-                        ? {
-                              ...c,
-                              messages: c.messages.map((m) =>
-                                  m.id === optimisticMessage.id
-                                      ? {
-                                            id: saved._id,
-                                            conversationId:
-                                                saved.conversationId,
-                                            text: saved.text,
-                                            sender: saved.sender,
-                                            time: saved.createdAt,
-                                            status: saved.status,
-                                        }
-                                      : m
-                              ),
-                          }
-                        : c
-                )
-            );
-        } catch (err) {
-            console.error("Failed to send message:", err);
+        // If conversation was not already in list, add it
+        if (!exists) {
+          const normalizedConv = {
+            ...conversation,
+            name: conversation.name || conversation.phone || "Unknown",
+            messages: [uiMessage],
+            unreadCount: 1,
+          };
+          return [normalizedConv, ...updated];
         }
+
+        return updated;
+      });
     };
 
-    // --------------------------------------
-    // RENDER
-    // --------------------------------------
+    socket.on("newMessage", handler);
+    return () => socket.off("newMessage", handler);
+  }, [socket, selectedChatId]);
 
-    return (
-        <div className="h-screen flex bg-gray-100">
-            <Sidebar
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-            />
+  // --------------------------------------
+  // BACKEND SYNC (FETCH DATA)
+  // --------------------------------------
 
-            <div className="flex-1 flex min-w-0">
-                {activeTab === "chats" && (
-                    <>
-                        {/* Chat List (left side) */}
-                        <div className="w-96 border-r hidden md:block">
-                            <ChatList
-                                conversations={conversations}
-                                filtered={filtered}
-                                searchQuery={searchQuery}
-                                setSearch={setSearchQuery}
-                                selectedChatId={selectedChatId}
-                                onSelect={setSelectedChatId}
-                            />
-                        </div>
+  // Fetch conversations on mount
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await getConversations();
 
-                        {/* Chat Window */}
-                        <div className="flex-1">
-                            {/* Mobile Chat List */}
-                            <div className="md:hidden border-b bg-white">
-                                <ChatList
-                                    conversations={conversations}
-                                    filtered={filtered}
-                                    searchQuery={searchQuery}
-                                    setSearch={setSearchQuery}
-                                    selectedChatId={selectedChatId}
-                                    onSelect={setSelectedChatId}
-                                />
-                            </div>
+        // Normalize conversation objects for UI
+        const normalized = (data || []).map((c) => ({
+          ...c,
+          name: c.name || c.displayName || c.phone || "Unknown",
+          messages: c.messages || [], // ensure messages exists
+        }));
 
-                            <ChatWindow
-                                chat={selectedChat}
-                                message={message}
-                                setMessage={setMessage}
-                                onSend={handleSend}
-                            />
-                        </div>
-                    </>
-                )}
+        setConversations(normalized);
+        if (normalized.length > 0) {
+          setSelectedChatId(normalized[0]._id);
+        }
+      } catch (err) {
+        console.error("getConversations failed:", err);
+      }
+    };
 
-                {activeTab === "broadcast" && <BroadcastView />}
+    load();
+  }, []);
 
-                {activeTab === "analytics" && (
-                    <AnalyticsView
-                        stats={ANALYTICS_STATS}
-                        messageVolume={MESSAGE_VOLUME}
-                        maxVolume={maxVolume}
-                    />
-                )}
+  // Fetch messages when selecting chat
+  useEffect(() => {
+    if (!selectedChatId) return;
 
-                {activeTab === 'contacts' && <ContactsPage />}
+    const loadMessages = async () => {
+      try {
+        const msgs = await getConversationMessages(selectedChatId);
 
+        // Map backend messages -> UI message shape
+        const uiMessages = (msgs || []).map((m) => ({
+          id: m._id,
+          conversationId: m.conversationId,
+          text: m.body,
+          sender: m.senderType,
+          time: m.createdAt,
+          status: m.status,
+        }));
 
-                {activeTab === "settings" && <SettingsView />}
-            </div>
-        </div>
+        setConversations((prev) =>
+          prev.map((c) =>
+            String(c._id) === String(selectedChatId)
+              ? { ...c, messages: uiMessages }
+              : c
+          )
+        );
+      } catch (err) {
+        console.log("getConversationMessages failed, keeping existing messages");
+      }
+    };
+
+    loadMessages();
+  }, [selectedChatId]);
+
+  // --------------------------------------
+  // FILTER, SELECTED CHAT
+  // --------------------------------------
+
+  const selectedChat = useMemo(
+    () =>
+      conversations.find((c) => String(c._id) === String(selectedChatId)) ||
+      null,
+    [conversations, selectedChatId]
+  );
+
+  const filtered = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+
+    const q = searchQuery.toLowerCase();
+
+    return conversations.filter((c) => {
+      const name = (c.name || "").toLowerCase();
+      const last = (c.lastMessage || "").toLowerCase();
+      const phone = (c.phone || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        last.includes(q) ||
+        phone.includes(q)
+      );
+    });
+  }, [conversations, searchQuery]);
+
+  // --------------------------------------
+  // SEND MESSAGE
+  // --------------------------------------
+
+  const handleSend = async () => {
+    if (!message.trim() || !selectedChat) return;
+
+    const currentChatId = selectedChat._id;
+    const time = new Date().toISOString();
+
+    const optimisticMessage = {
+      id: Date.now(),
+      conversationId: currentChatId,
+      text: message,
+      sender: "agent",
+      time,
+      status: "sending",
+    };
+
+    // Optimistic UI
+    setConversations((prev) =>
+      prev.map((c) =>
+        String(c._id) === String(currentChatId)
+          ? { ...c, messages: [...(c.messages || []), optimisticMessage] }
+          : c
+      )
     );
+
+    const toSend = message;
+    setMessage("");
+
+    try {
+      const saved = await sendMessage(currentChatId, toSend);
+
+      const uiSaved = {
+        id: saved._id,
+        conversationId: saved.conversationId,
+        text: saved.body,
+        sender: saved.senderType,
+        time: saved.createdAt,
+        status: saved.status,
+      };
+
+      // Replace optimistic message with saved one
+      setConversations((prev) =>
+        prev.map((c) =>
+          String(c._id) === String(currentChatId)
+            ? {
+                ...c,
+                lastMessage: uiSaved.text,
+                messages: (c.messages || []).map((m) =>
+                  m.id === optimisticMessage.id ? uiSaved : m
+                ),
+              }
+            : c
+        )
+      );
+    } catch (err) {
+      console.error("Failed to send message:", err);
+
+      // Mark optimistic message as failed
+      setConversations((prev) =>
+        prev.map((c) =>
+          String(c._id) === String(currentChatId)
+            ? {
+                ...c,
+                messages: (c.messages || []).map((m) =>
+                  m.id === optimisticMessage.id
+                    ? { ...m, status: "failed" }
+                    : m
+                ),
+              }
+            : c
+        )
+      );
+    }
+  };
+
+  // --------------------------------------
+  // RENDER
+  // --------------------------------------
+
+  return (
+    <div className="h-screen flex bg-gray-100">
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
+
+      <div className="flex-1 flex min-w-0">
+        {activeTab === "chats" && (
+          <>
+            {/* Chat List (left side) */}
+            <div className="w-96 border-r hidden md:block">
+              <ChatList
+                conversations={conversations}
+                filtered={filtered}
+                searchQuery={searchQuery}
+                setSearch={setSearchQuery}
+                selectedChatId={selectedChatId}
+                onSelect={setSelectedChatId}
+              />
+            </div>
+
+            {/* Chat Window */}
+            <div className="flex-1">
+              {/* Mobile Chat List */}
+              <div className="md:hidden border-b bg-white">
+                <ChatList
+                  conversations={conversations}
+                  filtered={filtered}
+                  searchQuery={searchQuery}
+                  setSearch={setSearchQuery}
+                  selectedChatId={selectedChatId}
+                  onSelect={setSelectedChatId}
+                />
+              </div>
+
+              <ChatWindow
+                chat={selectedChat}
+                message={message}
+                setMessage={setMessage}
+                onSend={handleSend}
+              />
+            </div>
+          </>
+        )}
+
+        {activeTab === "broadcast" && <BroadcastView />}
+
+        {activeTab === "analytics" && (
+          <AnalyticsView
+            stats={ANALYTICS_STATS}
+            messageVolume={MESSAGE_VOLUME}
+            maxVolume={maxVolume}
+          />
+        )}
+
+        {activeTab === "contacts" && (
+          <ContactsPage
+            onOpenConversation={(conv) => {
+              if (!conv?._id) return;
+              setActiveTab("chats");
+              setSelectedChatId(conv._id);
+            }}
+          />
+        )}
+
+        {activeTab === "settings" && <SettingsView />}
+      </div>
+    </div>
+  );
 };
 
 export default WhatsAppDashboard;
