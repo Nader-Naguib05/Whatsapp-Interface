@@ -23,7 +23,7 @@ export async function verifyWebhook(req, res) {
 export async function receiveWebhook(req, res) {
   try {
     const events = parseIncoming(req.body);
-
+    console.log("events:", events);
     if (!events.length) return res.sendStatus(200);
 
     for (const ev of events) {
