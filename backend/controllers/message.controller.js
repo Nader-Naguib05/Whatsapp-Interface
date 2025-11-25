@@ -5,7 +5,7 @@ import { sendText, sendImage, sendDocument, sendTemplate, markAsRead } from '../
 import { getIO } from '../sockets/chatSocket.js';
 import { findOrCreateConversationByPhone } from '../utils/helpers.js';
 
-// send text (client -> business)
+// send text (business -> customer)
 export async function sendTextController(req, res) {
   try {
     const { conversationId, to, body } = req.body;
@@ -20,13 +20,12 @@ export async function sendTextController(req, res) {
       return res.status(400).json({ error: 'Provide conversationId or to phone' });
     }
 
-    // ensure conversation exists if sending by phone
     if (!conv) conv = await findOrCreateConversationByPhone(targetPhone);
 
-    // send via Meta API
+    // Send via Meta API
     const metaRes = await sendText(targetPhone, body);
 
-    // save message locally
+    // Save message
     const msg = new Message({
       conversationId: conv._id,
       from: 'business',
@@ -39,22 +38,23 @@ export async function sendTextController(req, res) {
 
     await msg.save();
 
-    // update conv
+    // Update conversation
     conv.lastMessage = body;
     conv.updatedAt = new Date();
     await conv.save();
 
-    // emit
-    try { getIO().to(String(conv._1d)).emit('newMessage', { conversation: conv, message: msg }); } catch(e){/* ignore */} 
-    // note: emit below is correct - fixing probable typo above
-    try { getIO().to(String(conv._id)).emit('newMessage', { conversation: conv, message: msg }); } catch (e) {}
+    // ❌ DO NOT EMIT TO THE SAME AGENT UI
+    // Only emit to customers or other agents (if multi-agent system)
+    // getIO().to(String(conv._id)).emit('newMessage', { conversation: conv, message: msg });
 
     return res.json({ ok: true, message: msg });
+
   } catch (err) {
     console.error('sendTextController error:', err);
     return res.status(500).json({ error: 'Failed to send message' });
   }
 }
+
 
 export async function sendImageController(req, res) {
   try {
