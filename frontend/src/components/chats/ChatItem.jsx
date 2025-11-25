@@ -13,18 +13,33 @@ const ChatItem = ({ conv, selected, onSelect }) => {
     >
       <div className="flex items-start gap-3">
         <Avatar name={conv.name} status={conv.status} />
+
         <div className="flex-1 min-w-0">
+          {/* Name + Time */}
           <div className="flex justify-between items-start">
-            <h3 className="font-semibold text-gray-900 truncate">{conv.name}</h3>
-            <span className="text-xs text-gray-500">{conv.time}</span>
+            <h3 className="font-semibold text-gray-900 truncate">
+              {conv.name || conv.phone}
+            </h3>
+
+            <span className="text-xs text-gray-500">
+              {conv.updatedAt
+                ? new Date(conv.updatedAt).toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })
+                : ""}
+            </span>
           </div>
 
+          {/* Last message + unread badge */}
           <div className="flex justify-between items-center mt-1 gap-2">
-            <p className="text-sm text-gray-600 truncate">{conv.lastMessage}</p>
+            <p className="text-sm text-gray-600 truncate">
+              {conv.lastMessage || ""}
+            </p>
 
-            {conv.unread > 0 && (
+            {conv.unreadCount > 0 && (
               <span className="bg-green-500 text-white text-xs rounded-full px-2 py-0.5 min-w-[20px] text-center">
-                {conv.unread}
+                {conv.unreadCount}
               </span>
             )}
           </div>

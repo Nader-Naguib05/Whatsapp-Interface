@@ -23,7 +23,7 @@ const ChatList = ({ conversations, filtered, searchQuery, setSearch, selectedCha
             <ChatItem
               key={conv._id}
               conv={conv}
-              selected={selectedChatId === conv._id}
+              selected={String(selectedChatId) === String(conv._id)}
               onSelect={onSelect}
             />
           ))
