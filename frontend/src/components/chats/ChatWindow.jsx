@@ -7,6 +7,8 @@ import { MessageSquare, Phone, MoreVertical } from "lucide-react";
 
 const ChatWindow = ({ chat, message, setMessage, onSend }) => {
   const chatBottomRef = useRef(null);
+  console.log("messages:", chat.messages);
+
 
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: "smooth" });
