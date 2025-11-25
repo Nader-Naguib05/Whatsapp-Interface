@@ -6,6 +6,6 @@ export const getConversations = async () => {
 };
 
 export const getConversationMessages = async (conversationId) => {
-  const { data } = await api.get(`/messages/${conversationId}`);
+  const { data } = await api.get(`/conversations/${conversationId}`);
   return data;
 };
