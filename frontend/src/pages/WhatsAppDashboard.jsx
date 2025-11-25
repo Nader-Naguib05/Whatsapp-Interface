@@ -257,7 +257,7 @@ const WhatsAppDashboard = () => {
     setMessage("");
 
     try {
-      const saved = await sendMessage(currentChatId, toSend);
+      const saved = await sendMessage(currentChatId, selectedChat.phone, toSend);
 
       const uiSaved = {
         id: saved._id,
