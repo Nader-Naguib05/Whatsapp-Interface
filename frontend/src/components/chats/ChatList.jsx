@@ -21,9 +21,9 @@ const ChatList = ({ conversations, filtered, searchQuery, setSearch, selectedCha
         ) : (
           filtered.map((conv) => (
             <ChatItem
-              key={conv.id}
+              key={conv._id}
               conv={conv}
-              selected={selectedChatId === conv.id}
+              selected={selectedChatId === conv._id}
               onSelect={onSelect}
             />
           ))

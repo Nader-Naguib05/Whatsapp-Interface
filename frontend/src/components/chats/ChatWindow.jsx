@@ -48,7 +48,7 @@ const ChatWindow = ({ chat, message, setMessage, onSend }) => {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-6 space-y-4">
         {chat.messages.map((msg) => (
-          <MessageBubble key={msg.id} msg={msg} />
+          <MessageBubble key={msg._id} msg={msg} />
         ))}
 
         <div ref={chatBottomRef} />

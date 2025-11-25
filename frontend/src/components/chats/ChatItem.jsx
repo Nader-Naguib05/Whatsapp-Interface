@@ -5,7 +5,7 @@ import { cn } from "../../utils/cn";
 const ChatItem = ({ conv, selected, onSelect }) => {
   return (
     <div
-      onClick={() => onSelect(conv.id)}
+      onClick={() => onSelect(conv._id)}
       className={cn(
         "p-4 border-b cursor-pointer hover:bg-gray-50 transition",
         selected && "bg-green-50"

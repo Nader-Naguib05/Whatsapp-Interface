@@ -292,7 +292,7 @@ const WhatsAppDashboard = () => {
             ? {
                 ...c,
                 messages: (c.messages || []).map((m) =>
-                  m.id === optimisticMessage.id
+                  m._id === optimisticMessage._id
                     ? { ...m, status: "failed" }
                     : m
                 ),
