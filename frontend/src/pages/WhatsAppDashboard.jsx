@@ -36,6 +36,25 @@ import { sendMessage } from "../api/messages";
 // Socket
 import { createSocket } from "../lib/socket";
 
+// ---------- helpers ----------
+
+// Normalize backend message -> UI message
+const mapBackendMessage = (m) => {
+  if (!m) return null;
+
+  const text = m.body ?? m.text ?? "";
+  if (!text) return null; // drop empty/no-text events
+
+  return {
+    id: m._id || m.id,
+    conversationId: m.conversationId,
+    text,
+    sender: m.senderType || m.sender, // "customer" | "agent"
+    time: m.createdAt || m.timestamp,
+    status: m.status,
+  };
+};
+
 const WhatsAppDashboard = () => {
   const [activeTab, setActiveTab] = useState("chats");
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -85,42 +104,48 @@ const WhatsAppDashboard = () => {
     const handler = ({ conversation, message: rawMessage }) => {
       console.log("SOCKET newMessage:", { conversation, rawMessage });
 
-      // Map backend messageDoc -> UI message shape
-      const uiMessage = {
-        id: rawMessage._id,
-        conversationId: rawMessage.conversationId,
-        text: rawMessage.body,
-        sender: rawMessage.senderType, // "customer" | "agent"
-        time: rawMessage.createdAt,
-        status: rawMessage.status,
-      };
+      const uiMessage = mapBackendMessage(rawMessage);
+      if (!uiMessage) return; // ignore empty / non-text events
+
+      const convId = String(conversation._id || conversation.id || uiMessage.conversationId);
 
       setConversations((prev) => {
         let exists = false;
 
         const updated = prev.map((c) => {
-          if (String(c._id) === String(conversation._id)) {
-            exists = true;
-            return {
-              ...c,
-              lastMessage: uiMessage.text || c.lastMessage,
-              updatedAt: uiMessage.time || c.updatedAt,
-              messages: [...(c.messages || []), uiMessage],
-              // simple unread increment if not currently selected
-              unreadCount:
-                String(c._id) === String(selectedChatId)
-                  ? c.unreadCount || 0
-                  : (c.unreadCount || 0) + 1,
-            };
+          if (String(c._id) !== convId) return c;
+
+          exists = true;
+
+          const existingMessages = c.messages || [];
+          const idx = existingMessages.findIndex((m) => m.id === uiMessage.id);
+
+          let newMessages;
+          if (idx !== -1) {
+            // replace if already there (avoid duplicates)
+            newMessages = [...existingMessages];
+            newMessages[idx] = uiMessage;
+          } else {
+            newMessages = [...existingMessages, uiMessage];
           }
-          return c;
+
+          return {
+            ...c,
+            lastMessage: uiMessage.text || c.lastMessage,
+            updatedAt: uiMessage.time || c.updatedAt,
+            messages: newMessages,
+            unreadCount:
+              String(c._id) === String(selectedChatId)
+                ? c.unreadCount || 0
+                : (c.unreadCount || 0) + 1,
+          };
         });
 
-        // If conversation was not already in list, add it
         if (!exists) {
           const normalizedConv = {
             ...conversation,
-            name: conversation.name || conversation.phone || "Unknown",
+            _id: conversation._id || conversation.id,
+            name: conversation.name || conversation.displayName || conversation.phone || "Unknown",
             messages: [uiMessage],
             unreadCount: 1,
           };
@@ -145,11 +170,12 @@ const WhatsAppDashboard = () => {
       try {
         const data = await getConversations();
 
-        // Normalize conversation objects for UI
         const normalized = (data || []).map((c) => ({
           ...c,
+          _id: c._id || c.id,
           name: c.name || c.displayName || c.phone || "Unknown",
-          messages: c.messages || [], // ensure messages exists
+          messages: c.messages || [],
+          unreadCount: c.unreadCount || 0,
         }));
 
         setConversations(normalized);
@@ -170,17 +196,16 @@ const WhatsAppDashboard = () => {
 
     const loadMessages = async () => {
       try {
-        const msgs = await getConversationMessages(selectedChatId);
+        const res = await getConversationMessages(selectedChatId);
 
-        // Map backend messages -> UI message shape
-        const uiMessages = (msgs || []).map((m) => ({
-          id: m._id,
-          conversationId: m.conversationId,
-          text: m.body,
-          sender: m.senderType,
-          time: m.createdAt,
-          status: m.status,
-        }));
+        // Support both: array OR { messages: [...] }
+        const rawMessages = Array.isArray(res)
+          ? res
+          : res?.messages || [];
+
+        const uiMessages = rawMessages
+          .map(mapBackendMessage)
+          .filter(Boolean);
 
         setConversations((prev) =>
           prev.map((c) =>
@@ -217,11 +242,7 @@ const WhatsAppDashboard = () => {
       const name = (c.name || "").toLowerCase();
       const last = (c.lastMessage || "").toLowerCase();
       const phone = (c.phone || "").toLowerCase();
-      return (
-        name.includes(q) ||
-        last.includes(q) ||
-        phone.includes(q)
-      );
+      return name.includes(q) || last.includes(q) || phone.includes(q);
     });
   }, [conversations, searchQuery]);
 
@@ -236,7 +257,7 @@ const WhatsAppDashboard = () => {
     const time = new Date().toISOString();
 
     const optimisticMessage = {
-      id: Date.now(),
+      id: `temp-${Date.now()}`,
       conversationId: currentChatId,
       text: message,
       sender: "agent",
@@ -259,16 +280,9 @@ const WhatsAppDashboard = () => {
     try {
       const saved = await sendMessage(currentChatId, selectedChat.phone, toSend);
 
-      const uiSaved = {
-        id: saved._id,
-        conversationId: saved.conversationId,
-        text: saved.body,
-        sender: saved.senderType,
-        time: saved.createdAt,
-        status: saved.status,
-      };
+      const uiSaved = mapBackendMessage(saved);
+      if (!uiSaved) return;
 
-      // Replace optimistic message with saved one
       setConversations((prev) =>
         prev.map((c) =>
           String(c._id) === String(currentChatId)
@@ -292,7 +306,7 @@ const WhatsAppDashboard = () => {
             ? {
                 ...c,
                 messages: (c.messages || []).map((m) =>
-                  m._id === optimisticMessage._id
+                  m.id === optimisticMessage.id
                     ? { ...m, status: "failed" }
                     : m
                 ),
@@ -332,7 +346,7 @@ const WhatsAppDashboard = () => {
             </div>
 
             {/* Chat Window */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0 flex flex-col">
               {/* Mobile Chat List */}
               <div className="md:hidden border-b bg-white">
                 <ChatList
