@@ -28,9 +28,6 @@ export async function receiveWebhook(req, res) {
 
     for (const ev of events) {
         
-      // -------------------------------
-      // 🔵 CASE 1: User sent a message
-      // -------------------------------
       if (ev.event === "message") {
         if (!ev.text) continue; // ignore empty payloads
 
