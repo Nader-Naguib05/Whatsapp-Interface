@@ -1,11 +1,8 @@
+// src/pages/WhatsAppDashboard.jsx
 import React, { useState, useEffect, useMemo, useRef } from "react";
 
 // Layout
 import Sidebar from "../components/layout/Sidebar";
-
-// Chats
-import ChatList from "../components/chats/ChatList";
-import ChatWindow from "../components/chats/ChatWindow";
 
 // Broadcast
 import BroadcastView from "../components/broadcast/BroadcastView";
@@ -18,6 +15,9 @@ import ContactsPage from "./ContactsPage";
 
 // Settings
 import SettingsView from "../components/settings/SettingsView";
+
+// Chat layout (new)
+import ChatLayout from "../components/chats/ChatLayout";
 
 // Data (only analytics/mock stats)
 import {
@@ -35,25 +35,6 @@ import { sendMessage } from "../api/messages";
 
 // Socket
 import { createSocket } from "../lib/socket";
-
-// ---------- helpers ----------
-
-// Normalize backend message -> UI message
-const mapBackendMessage = (m) => {
-  if (!m) return null;
-
-  const text = m.body ?? m.text ?? "";
-  if (!text) return null; // drop empty/no-text events
-
-  return {
-    id: m._id || m.id,
-    conversationId: m.conversationId,
-    text,
-    sender: m.senderType || m.sender, // "customer" | "agent"
-    time: m.createdAt || m.timestamp,
-    status: m.status,
-  };
-};
 
 const WhatsAppDashboard = () => {
   const [activeTab, setActiveTab] = useState("chats");
@@ -87,12 +68,10 @@ const WhatsAppDashboard = () => {
   useEffect(() => {
     if (!socket || !selectedChatId) return;
 
-    // leave previous
     if (prevChatRef.current && prevChatRef.current !== selectedChatId) {
       socket.emit("leaveConversation", prevChatRef.current);
     }
 
-    // join new
     socket.emit("joinConversation", selectedChatId);
     prevChatRef.current = selectedChatId;
   }, [socket, selectedChatId]);
@@ -102,52 +81,50 @@ const WhatsAppDashboard = () => {
     if (!socket) return;
 
     const handler = ({ conversation, message: rawMessage }) => {
-      console.log("SOCKET newMessage:", { conversation, rawMessage });
+      // extra safety in case backend still emits agent messages
+      if (rawMessage.senderType === "agent") return;
 
-      const uiMessage = mapBackendMessage(rawMessage);
-      if (!uiMessage) return; // ignore empty / non-text events
+      const uiMessage = {
+        id: rawMessage._id,
+        conversationId: String(rawMessage.conversationId || conversation._id),
+        text: rawMessage.body,
+        sender: rawMessage.senderType, // "customer" | "agent"
+        time: rawMessage.createdAt,
+        status: rawMessage.status || "received",
+      };
 
-      const convId = String(conversation._id || conversation.id || uiMessage.conversationId);
+      const convId = String(conversation._id);
 
       setConversations((prev) => {
         let exists = false;
 
         const updated = prev.map((c) => {
-          if (String(c._id) !== convId) return c;
-
-          exists = true;
-
-          const existingMessages = c.messages || [];
-          const idx = existingMessages.findIndex((m) => m.id === uiMessage.id);
-
-          let newMessages;
-          if (idx !== -1) {
-            // replace if already there (avoid duplicates)
-            newMessages = [...existingMessages];
-            newMessages[idx] = uiMessage;
-          } else {
-            newMessages = [...existingMessages, uiMessage];
+          if (String(c.id) === convId) {
+            exists = true;
+            return {
+              ...c,
+              lastMessage: uiMessage.text || c.lastMessage,
+              lastMessageAt: uiMessage.time || c.lastMessageAt,
+              messages: [...(c.messages || []), uiMessage],
+              unread:
+                convId === String(selectedChatId)
+                  ? c.unread || 0
+                  : (c.unread || 0) + 1,
+            };
           }
-
-          return {
-            ...c,
-            lastMessage: uiMessage.text || c.lastMessage,
-            updatedAt: uiMessage.time || c.updatedAt,
-            messages: newMessages,
-            unreadCount:
-              String(c._id) === String(selectedChatId)
-                ? c.unreadCount || 0
-                : (c.unreadCount || 0) + 1,
-          };
+          return c;
         });
 
         if (!exists) {
           const normalizedConv = {
-            ...conversation,
-            _id: conversation._id || conversation.id,
-            name: conversation.name || conversation.displayName || conversation.phone || "Unknown",
+            id: convId,
+            _id: conversation._id,
+            name: conversation.name || conversation.phone || "Unknown",
+            phone: conversation.phone,
+            lastMessage: uiMessage.text,
+            lastMessageAt: uiMessage.time,
+            unread: 1,
             messages: [uiMessage],
-            unreadCount: 1,
           };
           return [normalizedConv, ...updated];
         }
@@ -170,17 +147,23 @@ const WhatsAppDashboard = () => {
       try {
         const data = await getConversations();
 
-        const normalized = (data || []).map((c) => ({
-          ...c,
-          _id: c._id || c.id,
-          name: c.name || c.displayName || c.phone || "Unknown",
-          messages: c.messages || [],
-          unreadCount: c.unreadCount || 0,
-        }));
+        const normalized = (data || []).map((c) => {
+          const id = String(c._id || c.id);
+          return {
+            ...c,
+            id,
+            name: c.name || c.displayName || c.phone || "Unknown",
+            phone: c.phone,
+            lastMessage: c.lastMessage || "",
+            lastMessageAt: c.updatedAt || c.createdAt,
+            unread: c.unreadCount || 0,
+            messages: c.messages || [],
+          };
+        });
 
         setConversations(normalized);
         if (normalized.length > 0) {
-          setSelectedChatId(normalized[0]._id);
+          setSelectedChatId(normalized[0].id);
         }
       } catch (err) {
         console.error("getConversations failed:", err);
@@ -196,26 +179,28 @@ const WhatsAppDashboard = () => {
 
     const loadMessages = async () => {
       try {
-        const res = await getConversationMessages(selectedChatId);
+        const msgs = await getConversationMessages(selectedChatId);
 
-        // Support both: array OR { messages: [...] }
-        const rawMessages = Array.isArray(res)
-          ? res
-          : res?.messages || [];
-
-        const uiMessages = rawMessages
-          .map(mapBackendMessage)
-          .filter(Boolean);
+        const uiMessages = (msgs || []).map((m) => ({
+          id: m._id,
+          conversationId: String(m.conversationId),
+          text: m.body,
+          sender: m.senderType, // "agent" | "customer"
+          time: m.createdAt,
+          status: m.status || "sent",
+        }));
 
         setConversations((prev) =>
           prev.map((c) =>
-            String(c._id) === String(selectedChatId)
+            String(c.id) === String(selectedChatId)
               ? { ...c, messages: uiMessages }
               : c
           )
         );
       } catch (err) {
-        console.log("getConversationMessages failed, keeping existing messages");
+        console.log(
+          "getConversationMessages failed, keeping existing messages"
+        );
       }
     };
 
@@ -228,8 +213,9 @@ const WhatsAppDashboard = () => {
 
   const selectedChat = useMemo(
     () =>
-      conversations.find((c) => String(c._id) === String(selectedChatId)) ||
-      null,
+      conversations.find(
+        (c) => String(c.id) === String(selectedChatId)
+      ) || null,
     [conversations, selectedChatId]
   );
 
@@ -242,53 +228,106 @@ const WhatsAppDashboard = () => {
       const name = (c.name || "").toLowerCase();
       const last = (c.lastMessage || "").toLowerCase();
       const phone = (c.phone || "").toLowerCase();
-      return name.includes(q) || last.includes(q) || phone.includes(q);
+      return (
+        name.includes(q) ||
+        last.includes(q) ||
+        phone.includes(q)
+      );
     });
   }, [conversations, searchQuery]);
+
+  // conversations mapped for ChatLayout
+  const layoutConversations = useMemo(
+    () =>
+      filtered.map((c) => ({
+        id: String(c.id),
+        name: c.name,
+        phone: c.phone,
+        lastMessage: c.lastMessage,
+        lastMessageAt: c.lastMessageAt,
+        unread: c.unread || 0,
+        initials: (c.name || c.phone || "?")
+          .slice(0, 2)
+          .toUpperCase(),
+      })),
+    [filtered]
+  );
+
+  // messages mapped for ChatLayout
+  const layoutMessages = useMemo(() => {
+    if (!selectedChat) return [];
+    return (selectedChat.messages || []).map((m) => ({
+      id: m.id || m._id,
+      text: m.text || m.body,
+      body: m.text || m.body,
+      timestamp: m.time || m.createdAt,
+      direction: m.sender === "agent" || m.senderType === "agent"
+        ? "outgoing"
+        : "incoming",
+      fromMe:
+        m.sender === "agent" || m.senderType === "agent",
+      status: m.status || "sent",
+    }));
+  }, [selectedChat]);
 
   // --------------------------------------
   // SEND MESSAGE
   // --------------------------------------
 
-  const handleSend = async () => {
-    if (!message.trim() || !selectedChat) return;
+  const handleSend = async (textFromLayout) => {
+    const content = (textFromLayout ?? message).trim();
+    if (!content || !selectedChat) return;
 
-    const currentChatId = selectedChat._id;
+    const currentChatId = selectedChat.id;
     const time = new Date().toISOString();
 
     const optimisticMessage = {
-      id: `temp-${Date.now()}`,
+      id: Date.now(),
       conversationId: currentChatId,
-      text: message,
+      text: content,
       sender: "agent",
       time,
       status: "sending",
     };
 
-    // Optimistic UI
     setConversations((prev) =>
       prev.map((c) =>
-        String(c._id) === String(currentChatId)
-          ? { ...c, messages: [...(c.messages || []), optimisticMessage] }
+        String(c.id) === String(currentChatId)
+          ? {
+              ...c,
+              messages: [...(c.messages || []), optimisticMessage],
+              lastMessage: content,
+              lastMessageAt: time,
+            }
           : c
       )
     );
 
-    const toSend = message;
     setMessage("");
 
     try {
-      const saved = await sendMessage(currentChatId, selectedChat.phone, toSend);
+      const saved = await sendMessage(
+        currentChatId,
+        selectedChat.phone,
+        content
+      );
 
-      const uiSaved = mapBackendMessage(saved);
-      if (!uiSaved) return;
+      const uiSaved = {
+        id: saved._id,
+        conversationId: String(saved.conversationId),
+        text: saved.body,
+        sender: saved.senderType,
+        time: saved.createdAt,
+        status: saved.status || "sent",
+      };
 
       setConversations((prev) =>
         prev.map((c) =>
-          String(c._id) === String(currentChatId)
+          String(c.id) === String(currentChatId)
             ? {
                 ...c,
                 lastMessage: uiSaved.text,
+                lastMessageAt: uiSaved.time,
                 messages: (c.messages || []).map((m) =>
                   m.id === optimisticMessage.id ? uiSaved : m
                 ),
@@ -299,10 +338,9 @@ const WhatsAppDashboard = () => {
     } catch (err) {
       console.error("Failed to send message:", err);
 
-      // Mark optimistic message as failed
       setConversations((prev) =>
         prev.map((c) =>
-          String(c._id) === String(currentChatId)
+          String(c.id) === String(currentChatId)
             ? {
                 ...c,
                 messages: (c.messages || []).map((m) =>
@@ -332,41 +370,23 @@ const WhatsAppDashboard = () => {
 
       <div className="flex-1 flex min-w-0">
         {activeTab === "chats" && (
-          <>
-            {/* Chat List (left side) */}
-            <div className="w-96 border-r hidden md:block">
-              <ChatList
-                conversations={conversations}
-                filtered={filtered}
-                searchQuery={searchQuery}
-                setSearch={setSearchQuery}
-                selectedChatId={selectedChatId}
-                onSelect={setSelectedChatId}
-              />
-            </div>
-
-            {/* Chat Window */}
-            <div className="flex-1 min-w-0 flex flex-col">
-              {/* Mobile Chat List */}
-              <div className="md:hidden border-b bg-white">
-                <ChatList
-                  conversations={conversations}
-                  filtered={filtered}
-                  searchQuery={searchQuery}
-                  setSearch={setSearchQuery}
-                  selectedChatId={selectedChatId}
-                  onSelect={setSelectedChatId}
-                />
-              </div>
-
-              <ChatWindow
-                chat={selectedChat}
-                message={message}
-                setMessage={setMessage}
-                onSend={handleSend}
-              />
-            </div>
-          </>
+          <div className="flex-1 min-w-0">
+            <ChatLayout
+              conversations={layoutConversations}
+              activeConversationId={selectedChatId}
+              onSelectConversation={setSelectedChatId}
+              messages={layoutMessages}
+              onSendMessage={handleSend}
+              composerValue={message}
+              setComposerValue={setMessage}
+              onAttachClick={() => {
+                // later: open file picker / media modal
+                console.log("attach clicked");
+              }}
+              contactName={selectedChat?.name}
+              contactPhone={selectedChat?.phone}
+            />
+          </div>
         )}
 
         {activeTab === "broadcast" && <BroadcastView />}
@@ -382,9 +402,10 @@ const WhatsAppDashboard = () => {
         {activeTab === "contacts" && (
           <ContactsPage
             onOpenConversation={(conv) => {
-              if (!conv?._id) return;
+              if (!conv?._id && !conv?.id) return;
+              const id = String(conv._id || conv.id);
               setActiveTab("chats");
-              setSelectedChatId(conv._id);
+              setSelectedChatId(id);
             }}
           />
         )}

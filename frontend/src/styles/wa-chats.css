@@ -1,0 +1,381 @@
+/* Root shell */
+.wa-shell {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: 100vh;
+  background: #0a1014;
+  color: #111827;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+
+/* SIDEBAR */
+.wa-sidebar {
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.wa-sidebar-header {
+  padding: 12px 16px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.wa-app-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wa-search-wrapper {
+  position: relative;
+  padding: 8px 12px;
+}
+
+.wa-search-icon {
+  position: absolute;
+  top: 50%;
+  left: 20px;
+  transform: translateY(-50%);
+  opacity: 0.5;
+}
+
+.wa-search-input {
+  width: 100%;
+  padding: 6px 10px 6px 32px;
+  border-radius: 999px;
+  border: none;
+  background: #e5e7eb;
+  font-size: 13px;
+}
+
+.wa-search-input:focus {
+  outline: 2px solid #22c55e;
+  outline-offset: 1px;
+}
+
+.wa-conversation-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.wa-conversation-item {
+  width: 100%;
+  padding: 10px 12px;
+  display: flex;
+  gap: 10px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.wa-conversation-item:hover {
+  background: #e5e7eb;
+}
+
+.wa-conversation-item--active {
+  background: #dcfce7;
+}
+
+.wa-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+  background: #22c55e;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+}
+
+.wa-avatar--lg {
+  width: 40px;
+  height: 40px;
+  font-size: 18px;
+}
+
+.wa-conversation-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.wa-conversation-top-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.wa-conversation-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #111827;
+}
+
+.wa-conversation-time {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wa-conversation-bottom-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.wa-conversation-preview {
+  font-size: 12px;
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wa-unread-badge {
+  min-width: 18px;
+  height: 18px;
+  border-radius: 999px;
+  background: #16a34a;
+  color: white;
+  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* CHAT AREA */
+.wa-chat-area {
+  display: flex;
+  flex-direction: column;
+  background: #e5ddd5;
+}
+
+.wa-chat-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid #d1d5db;
+  background: #f9fafb;
+}
+
+.wa-chat-header-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.wa-chat-title {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.wa-chat-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.wa-chat-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wa-icon-button {
+  border: none;
+  background: transparent;
+  border-radius: 999px;
+  padding: 6px;
+  cursor: pointer;
+  color: #374151;
+}
+
+.wa-icon-button:hover {
+  background: #e5e7eb;
+}
+
+/* MESSAGES */
+.wa-chat-messages {
+  flex: 1;
+  padding: 16px 24px;
+  overflow-y: auto;
+  background: url("data:image/svg+xml,%3Csvg opacity='0.05' xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='80' height='80' fill='%23ffffff'/%3E%3Crect x='80' y='80' width='80' height='80' fill='%23ffffff'/%3E%3C/svg%3E")
+    repeat;
+}
+
+.wa-day-separator {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.wa-day-separator span {
+  background: #d1d5db;
+  padding: 3px 10px;
+  border-radius: 999px;
+}
+
+/* message rows */
+.wa-message-row {
+  display: flex;
+  margin-bottom: 4px;
+}
+
+.wa-message-row--incoming {
+  justify-content: flex-start;
+}
+
+.wa-message-row--outgoing {
+  justify-content: flex-end;
+}
+
+.wa-message-bubble {
+  max-width: 70%;
+  padding: 6px 8px 4px;
+  border-radius: 12px;
+  font-size: 14px;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.2);
+}
+
+.wa-message-bubble--incoming {
+  background: #ffffff;
+}
+
+.wa-message-bubble--outgoing {
+  background: #25d366;
+  color: #f9fafb;
+}
+
+.wa-message-bubble--sending {
+  opacity: 0.6;
+}
+
+.wa-message-text {
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.wa-message-meta {
+  margin-top: 2px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.wa-message-status svg {
+  display: block;
+}
+
+.wa-message-status--read {
+  color: #22c55e;
+}
+
+.wa-message-failed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: #b91c1c;
+  color: white;
+  font-size: 10px;
+}
+
+.wa-sending-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #9ca3af;
+}
+
+/* COMPOSER */
+.wa-chat-composer {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid #d1d5db;
+  background: #f3f4f6;
+}
+
+.wa-composer-input {
+  flex: 1;
+  resize: none;
+  border-radius: 999px;
+  border: none;
+  padding: 8px 12px;
+  font-size: 14px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.wa-composer-input:focus {
+  outline: 2px solid #22c55e;
+  outline-offset: 1px;
+  background: #ffffff;
+}
+
+.wa-send-button {
+  border-radius: 999px;
+  border: none;
+  padding: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #9ca3af;
+  color: white;
+  cursor: pointer;
+}
+
+.wa-send-button--active {
+  background: #22c55e;
+}
+
+.wa-send-button:disabled {
+  cursor: default;
+  opacity: 0.6;
+}
+
+/* EMPTY STATE */
+.wa-empty-state {
+  margin: auto;
+  text-align: center;
+  max-width: 320px;
+  color: #4b5563;
+}
+
+.wa-empty-state h2 {
+  margin-bottom: 4px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.wa-empty-state p {
+  font-size: 14px;
+}
+
+/* RESPONSIVE */
+@media (max-width: 900px) {
+  .wa-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .wa-sidebar {
+    display: none;
+  }
+
+  .wa-shell--show-sidebar .wa-sidebar {
+    display: flex;
+  }
+}
