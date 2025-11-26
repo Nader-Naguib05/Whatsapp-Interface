@@ -1,5 +1,6 @@
 // src/pages/WhatsAppDashboard.jsx
 import React, { useState, useEffect, useMemo, useRef, useReducer } from "react";
+const BACKEND = import.meta.env.VITE_API_URL;
 
 import Sidebar from "../components/layout/Sidebar";
 import BroadcastView from "../components/broadcast/BroadcastView";
@@ -458,7 +459,7 @@ const WhatsAppDashboard = () => {
 
         // Reset in database
         try {
-            await fetch("/conversations/reset-unread", {
+            await fetch(`${BACKEND}/conversations/reset-unread`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ conversationId: convId }),
