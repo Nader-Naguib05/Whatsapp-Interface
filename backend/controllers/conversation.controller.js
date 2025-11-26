@@ -25,3 +25,19 @@ export async function getConversation(req, res) {
     return res.status(500).json({ error: 'Server error' });
   }
 }
+
+export async function resetUnreadController(req, res) {
+  try {
+    const { conversationId } = req.body;
+
+    await Conversation.updateOne(
+      { _id: conversationId },
+      { unreadCount: 0 }
+    );
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error("resetUnreadController error:", err);
+    return res.status(500).json({ error: "Failed to reset unread" });
+  }
+}
