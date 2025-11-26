@@ -1,17 +1,50 @@
 import mongoose from "mongoose";
 
-const MessageSchema = new mongoose.Schema({
-  conversationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Conversation' },
-  from: String,
-  to: String,
-  senderType: { type: String, enum: ['customer', 'agent', 'system'], default: 'customer' },
-  body: String,
-  type: { type: String, default: 'text' },
-  meta: Object,
-  status: { type: String, enum: ['received','sent','delivered','read'], default: 'received' },
-  createdAt: { type: Date, default: Date.now }
-});
+const MessageSchema = new mongoose.Schema(
+  {
+    conversationId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Conversation",
+      required: true,
+    },
+
+    // Business → customer or customer → business
+    senderType: {
+      type: String,
+      enum: ["agent", "customer"],
+      required: true,
+    },
+
+    from: String,
+    to: String,
+
+    // MAIN TEXT
+    body: {
+      type: String,
+      default: "",
+    },
+
+    // 🔥 THE OFFICIAL WHATSAPP MESSAGE ID
+    msgId: {
+      type: String,
+      index: true, // fast lookup for delivery/read updates
+    },
+
+    // MEDIA SUPPORT
+    mediaUrl: String,
+
+    // META STATUS: "sent", "delivered", "read", "failed", "received"
+    status: {
+      type: String,
+      default: "sent",
+    },
+
+    // RAW META MESSAGE FROM WHATSAPP
+    meta: Object,
+
+    raw: Object,
+  },
+  { timestamps: true }
+);
 
 export const Message = mongoose.model("Message", MessageSchema);
- 
-
