@@ -458,7 +458,7 @@ const WhatsAppDashboard = () => {
 
         // Reset in database
         try {
-            await fetch("/api/conversations/reset-unread", {
+            await fetch("/conversations/reset-unread", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ conversationId: convId }),
