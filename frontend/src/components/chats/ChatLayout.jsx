@@ -89,7 +89,9 @@ function MessageBubble({ msg }) {
             : "")
         }
       >
-        <div className="wa-message-text">{text}</div>
+        <div className="wa-message-text">
+          {text}
+        </div>
         <div className="wa-message-meta">
           <span className="wa-message-time">
             {formatTime(timestamp)}
@@ -99,7 +101,9 @@ function MessageBubble({ msg }) {
               {status === "sending" && (
                 <span className="wa-sending-dot" />
               )}
-              {status === "sent" && <Check size={14} />}
+              {status === "sent" && (
+                <Check size={14} />
+              )}
               {status === "delivered" && (
                 <CheckCheck size={14} />
               )}
@@ -134,10 +138,15 @@ const ChatLayout = ({
   contactName,
   contactPhone,
   onEmojiClick,
+  hasMoreMessages = false,
+  isLoadingMore = false,
+  onLoadOlderMessages,
 }) => {
   const listRef = useRef(null);
   const bottomRef = useRef(null);
+  const messagesRef = useRef(null);
 
+  // auto-scroll to bottom when messages change (only for new ones)
   useEffect(() => {
     bottomRef.current?.scrollIntoView({
       behavior: "smooth",
@@ -166,6 +175,18 @@ const ChatLayout = ({
     }
   };
 
+  const handleScroll = () => {
+    const el = messagesRef.current;
+    if (!el || !onLoadOlderMessages) return;
+
+    // near the top
+    if (el.scrollTop <= 40) {
+      if (!isLoadingMore && hasMoreMessages) {
+        onLoadOlderMessages();
+      }
+    }
+  };
+
   // group messages by day
   const groupedByDay = [];
   let currentDay = null;
@@ -175,7 +196,6 @@ const ChatLayout = ({
       msg.timestamp || msg.time || msg.createdAt;
     const dayLabel = formatDayLabel(timestamp);
 
-    // CRITICAL: prefer clientId so optimistic bubble stays
     const baseId =
       msg.clientId ||
       msg.id ||
@@ -208,7 +228,10 @@ const ChatLayout = ({
         </div>
 
         <div className="wa-search-wrapper">
-          <Search className="wa-search-icon" size={16} />
+          <Search
+            className="wa-search-icon"
+            size={16}
+          />
           <input
             type="text"
             placeholder="Search conversations"
@@ -249,7 +272,9 @@ const ChatLayout = ({
                     ? " wa-conversation-item--active"
                     : "")
                 }
-                onClick={() => onSelectConversation(convId)}
+                onClick={() =>
+                  onSelectConversation(convId)
+                }
               >
                 <div className="wa-avatar">
                   {conv.initials ||
@@ -326,7 +351,17 @@ const ChatLayout = ({
               </div>
             </header>
 
-            <div className="wa-chat-messages">
+            <div
+              className="wa-chat-messages"
+              ref={messagesRef}
+              onScroll={handleScroll}
+            >
+              {isLoadingMore && hasMoreMessages && (
+                <div className="wa-loading-more">
+                  Loading older messages...
+                </div>
+              )}
+
               {groupedByDay.map((item) =>
                 item.type === "day" ? (
                   <div
@@ -394,7 +429,10 @@ const ChatLayout = ({
         ) : (
           <div className="wa-empty-state">
             <h2>Select a conversation</h2>
-            <p>Choose a customer from the left to start messaging.</p>
+            <p>
+              Choose a customer from the left to start
+              messaging.
+            </p>
           </div>
         )}
       </section>
