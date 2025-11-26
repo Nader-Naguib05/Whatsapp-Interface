@@ -1,453 +1,693 @@
 // src/pages/WhatsAppDashboard.jsx
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, {
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+  useReducer,
+} from "react";
 
-// Layout
 import Sidebar from "../components/layout/Sidebar";
-
-// Broadcast
 import BroadcastView from "../components/broadcast/BroadcastView";
-
-// Analytics
 import AnalyticsView from "../components/analytics/AnalyticsView";
-
-// Contacts
 import ContactsPage from "./ContactsPage";
-
-// Settings
 import SettingsView from "../components/settings/SettingsView";
-
-// Chat layout (new)
 import ChatLayout from "../components/chats/ChatLayout";
 
-// Data (only analytics/mock stats)
-import { ANALYTICS_STATS, MESSAGE_VOLUME, maxVolume } from "../data/mockData";
-
-// API
 import {
-    getConversations,
-    getConversationMessages,
-} from "../api/conversations";
-import { sendMessage } from "../api/messages";
+  ANALYTICS_STATS,
+  MESSAGE_VOLUME,
+  maxVolume,
+} from "../data/mockData";
 
-// Socket
+import {
+  getConversations,
+  getConversationMessages,
+} from "../api/conversations";
+
 import { createSocket } from "../lib/socket";
+// import EmojiPicker from "emoji-picker-react";
+
+const initialState = {
+  conversations: [],
+  messagesByConv: {}, // { [convId]: Message[] }
+  activeConversationId: null,
+  composerValue: "",
+};
+
+function upsertMessageInArray(arr, msg) {
+  const idx = arr.findIndex(
+    (m) =>
+      (msg.clientId && m.clientId === msg.clientId) ||
+      (msg.id && m.id === msg.id) ||
+      (msg._id && m._id === msg._id) ||
+      (msg.msgId && m.msgId === msg.msgId)
+  );
+  if (idx === -1) return [...arr, msg];
+
+  const copy = [...arr];
+  copy[idx] = { ...copy[idx], ...msg };
+  return copy;
+}
+
+function reducer(state, action) {
+  switch (action.type) {
+    case "SET_CONVERSATIONS":
+      return {
+        ...state,
+        conversations: action.payload || [],
+      };
+
+    case "SET_ACTIVE_CONVERSATION":
+      return {
+        ...state,
+        activeConversationId: action.payload,
+      };
+
+    case "SET_COMPOSER":
+      return {
+        ...state,
+        composerValue: action.payload,
+      };
+
+    case "SET_MESSAGES_FOR_CONV": {
+      const { conversationId, messages } = action.payload;
+      return {
+        ...state,
+        messagesByConv: {
+          ...state.messagesByConv,
+          [conversationId]: messages || [],
+        },
+      };
+    }
+
+    case "ADD_LOCAL_MESSAGE": {
+      const { conversationId, message } = action.payload;
+      const prev =
+        state.messagesByConv[conversationId] || [];
+      return {
+        ...state,
+        messagesByConv: {
+          ...state.messagesByConv,
+          [conversationId]: [...prev, message],
+        },
+        composerValue: "",
+      };
+    }
+
+    case "SERVER_ACK_MESSAGE": {
+      const { conversationId, clientId, serverMsg } =
+        action.payload;
+      const prev =
+        state.messagesByConv[conversationId] || [];
+      const updated = prev.map((m) =>
+        m.clientId === clientId
+          ? { ...m, ...serverMsg, clientId }
+          : m
+      );
+      return {
+        ...state,
+        messagesByConv: {
+          ...state.messagesByConv,
+          [conversationId]: updated,
+        },
+      };
+    }
+
+    case "UPSERT_MESSAGE": {
+      const { conversationId, msg } = action.payload;
+      const prev =
+        state.messagesByConv[conversationId] || [];
+      const updated = upsertMessageInArray(prev, msg);
+      return {
+        ...state,
+        messagesByConv: {
+          ...state.messagesByConv,
+          [conversationId]: updated,
+        },
+      };
+    }
+
+    case "UPDATE_MESSAGE_STATUS": {
+      const { conversationId, messageId, status } =
+        action.payload;
+      const prev =
+        state.messagesByConv[conversationId] || [];
+      const updated = prev.map((m) => {
+        const same =
+          m.msgId === messageId ||
+          m.clientId === messageId ||
+          m.id === messageId ||
+          m._id === messageId;
+        if (!same) return m;
+        return { ...m, status };
+      });
+      return {
+        ...state,
+        messagesByConv: {
+          ...state.messagesByConv,
+          [conversationId]: updated,
+        },
+      };
+    }
+
+    case "UPDATE_CONVERSATION_META": {
+      const { conversationId, patch } = action.payload;
+      return {
+        ...state,
+        conversations: state.conversations.map((c) =>
+          String(c.id) === String(conversationId)
+            ? { ...c, ...patch }
+            : c
+        ),
+      };
+    }
+
+    default:
+      return state;
+  }
+}
 
 const WhatsAppDashboard = () => {
-    const [activeTab, setActiveTab] = useState("chats");
-    const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState("chats");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [socket, setSocket] = useState(null);
+  const prevChatRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const [showEmojiPicker, setShowEmojiPicker] =
+    useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
 
-    const [conversations, setConversations] = useState([]);
-    const [selectedChatId, setSelectedChatId] = useState(null);
+  const [state, dispatch] = useReducer(
+    reducer,
+    initialState
+  );
+  const {
+    conversations,
+    messagesByConv,
+    activeConversationId,
+    composerValue,
+  } = state;
 
-    const [message, setMessage] = useState("");
-    const [searchQuery, setSearchQuery] = useState("");
+  const activeConversation =
+    conversations.find(
+      (c) =>
+        String(c.id) ===
+        String(activeConversationId || "")
+    ) || null;
 
-    const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-    const [pendingFile, setPendingFile] = useState(null);
-    const fileInputRef = useRef(null);
+  const activeMessages =
+    messagesByConv[activeConversationId] || [];
 
-    const [socket, setSocket] = useState(null);
-    const prevChatRef = useRef(null);
+  // --- socket setup ---
+  useEffect(() => {
+    const s = createSocket();
+    setSocket(s);
 
-    // --------------------------------------
-    // SOCKET SETUP
-    // --------------------------------------
-    useEffect(() => {
-        const s = createSocket();
-        setSocket(s);
-
-        s.on("connect", () => console.log("Socket connected:", s.id));
-        s.on("disconnect", () => console.log("Socket disconnected"));
-
-        return () => {
-            s.disconnect();
-        };
-    }, []);
-
-    // Join/leave conversation rooms when selected chat changes
-    useEffect(() => {
-        if (!socket || !selectedChatId) return;
-
-        if (prevChatRef.current && prevChatRef.current !== selectedChatId) {
-            socket.emit("leaveConversation", prevChatRef.current);
-        }
-
-        socket.emit("joinConversation", selectedChatId);
-        prevChatRef.current = selectedChatId;
-    }, [socket, selectedChatId]);
-
-    // Handle incoming messages (real-time from backend via socket)
-    useEffect(() => {
-        if (!socket) return;
-
-        const handler = ({ conversation, message: rawMessage }) => {
-            // extra safety in case backend still emits agent messages
-            if (rawMessage.senderType === "agent") return;
-
-            const uiMessage = {
-                id: rawMessage._id,
-                conversationId: String(
-                    rawMessage.conversationId || conversation._id
-                ),
-                text: rawMessage.body,
-                sender: rawMessage.senderType, // "customer" | "agent"
-                time: rawMessage.createdAt,
-                status: rawMessage.status || "received",
-            };
-
-            const convId = String(conversation._id);
-
-            setConversations((prev) => {
-                let exists = false;
-
-                const updated = prev.map((c) => {
-                    if (String(c.id) === convId) {
-                        exists = true;
-                        return {
-                            ...c,
-                            lastMessage: uiMessage.text || c.lastMessage,
-                            lastMessageAt: uiMessage.time || c.lastMessageAt,
-                            messages: [...(c.messages || []), uiMessage],
-                            unread:
-                                convId === String(selectedChatId)
-                                    ? c.unread || 0
-                                    : (c.unread || 0) + 1,
-                        };
-                    }
-                    return c;
-                });
-
-                if (!exists) {
-                    const normalizedConv = {
-                        id: convId,
-                        _id: conversation._id,
-                        name:
-                            conversation.name ||
-                            conversation.phone ||
-                            "Unknown",
-                        phone: conversation.phone,
-                        lastMessage: uiMessage.text,
-                        lastMessageAt: uiMessage.time,
-                        unread: 1,
-                        messages: [uiMessage],
-                    };
-                    return [normalizedConv, ...updated];
-                }
-
-                return updated;
-            });
-        };
-
-        socket.on("newMessage", handler);
-        return () => socket.off("newMessage", handler);
-    }, [socket, selectedChatId]);
-
-    // --------------------------------------
-    // BACKEND SYNC (FETCH DATA)
-    // --------------------------------------
-
-    // Fetch conversations on mount
-    useEffect(() => {
-        const load = async () => {
-            try {
-                const data = await getConversations();
-
-                const normalized = (data || []).map((c) => {
-                    const id = String(c._id || c.id);
-                    return {
-                        ...c,
-                        id,
-                        name: c.name || c.displayName || c.phone || "Unknown",
-                        phone: c.phone,
-                        lastMessage: c.lastMessage || "",
-                        lastMessageAt: c.updatedAt || c.createdAt,
-                        unread: c.unreadCount || 0,
-                        messages: c.messages || [],
-                    };
-                });
-
-                setConversations(normalized);
-                if (normalized.length > 0) {
-                    setSelectedChatId(normalized[0].id);
-                }
-            } catch (err) {
-                console.error("getConversations failed:", err);
-            }
-        };
-
-        load();
-    }, []);
-
-    // Fetch messages when selecting chat
-    useEffect(() => {
-        if (!selectedChatId) return;
-
-        const loadMessages = async () => {
-            try {
-                const msgs = await getConversationMessages(selectedChatId);
-
-                const uiMessages = (msgs || []).map((m) => ({
-                    id: m._id,
-                    conversationId: String(m.conversationId),
-                    text: m.body,
-                    sender: m.senderType, // "agent" | "customer"
-                    time: m.createdAt,
-                    status: m.status || "sent",
-                }));
-
-                setConversations((prev) =>
-                    prev.map((c) =>
-                        String(c.id) === String(selectedChatId)
-                            ? { ...c, messages: uiMessages }
-                            : c
-                    )
-                );
-            } catch (err) {
-                console.log(
-                    "getConversationMessages failed, keeping existing messages"
-                );
-            }
-        };
-
-        loadMessages();
-    }, [selectedChatId]);
-
-    // --------------------------------------
-    // FILTER, SELECTED CHAT
-    // --------------------------------------
-
-    const selectedChat = useMemo(
-        () =>
-            conversations.find(
-                (c) => String(c.id) === String(selectedChatId)
-            ) || null,
-        [conversations, selectedChatId]
+    s.on("connect", () =>
+      console.log("Socket connected:", s.id)
+    );
+    s.on("disconnect", () =>
+      console.log("Socket disconnected")
     );
 
-    const filtered = useMemo(() => {
-        if (!searchQuery.trim()) return conversations;
+    return () => {
+      s.disconnect();
+    };
+  }, []);
 
-        const q = searchQuery.toLowerCase();
+  // join / leave conversation rooms
+  useEffect(() => {
+    if (!socket || !activeConversationId) return;
 
-        return conversations.filter((c) => {
-            const name = (c.name || "").toLowerCase();
-            const last = (c.lastMessage || "").toLowerCase();
-            const phone = (c.phone || "").toLowerCase();
-            return name.includes(q) || last.includes(q) || phone.includes(q);
+    if (
+      prevChatRef.current &&
+      prevChatRef.current !== activeConversationId
+    ) {
+      socket.emit(
+        "leaveConversation",
+        prevChatRef.current
+      );
+    }
+
+    socket.emit("joinConversation", activeConversationId);
+    prevChatRef.current = activeConversationId;
+  }, [socket, activeConversationId]);
+
+  // socket events
+  useEffect(() => {
+    if (!socket) return;
+
+    const handleNewMessage = ({
+      conversation,
+      message: raw,
+    }) => {
+      const convId = String(
+        conversation._id || conversation.id
+      );
+      const senderType =
+        raw.senderType || raw.sender || "customer";
+
+      const uiMsg = {
+        id: raw._id,
+        clientId: raw.clientId || undefined,
+        conversationId: convId,
+        text: raw.body,
+        body: raw.body,
+        mediaUrl: raw.mediaUrl,
+        senderType,
+        fromMe: senderType === "agent",
+        from:
+          senderType === "agent"
+            ? "business"
+            : "customer",
+        timestamp: raw.createdAt,
+        status:
+          raw.status ||
+          (senderType === "agent"
+            ? "sent"
+            : "received"),
+        msgId: raw.msgId,
+      };
+
+      dispatch({
+        type: "UPSERT_MESSAGE",
+        payload: { conversationId: convId, msg: uiMsg },
+      });
+
+      const isActive =
+        String(activeConversationId) === convId;
+
+      dispatch({
+        type: "UPDATE_CONVERSATION_META",
+        payload: {
+          conversationId: convId,
+          patch: {
+            lastMessage: uiMsg.text,
+            lastMessageAt: uiMsg.timestamp,
+            unread: isActive
+              ? 0
+              : (conversation.unread || 0) + 1,
+          },
+        },
+      });
+    };
+
+    const handleMessageAck = (serverMsg) => {
+      const convId = String(
+        serverMsg.conversationId ||
+          serverMsg.chatId
+      );
+      const clientId = serverMsg.clientId;
+      if (!convId || !clientId) return;
+
+      const uiMsg = {
+        id: serverMsg._id,
+        clientId,
+        conversationId: convId,
+        text: serverMsg.body,
+        body: serverMsg.body,
+        mediaUrl: serverMsg.mediaUrl,
+        senderType:
+          serverMsg.senderType || "agent",
+        fromMe: true,
+        from: "business",
+        timestamp: serverMsg.createdAt,
+        status: serverMsg.status || "sent",
+        msgId: serverMsg.msgId,
+      };
+
+      dispatch({
+        type: "SERVER_ACK_MESSAGE",
+        payload: {
+          conversationId: convId,
+          clientId,
+          serverMsg: uiMsg,
+        },
+      });
+
+      dispatch({
+        type: "UPDATE_CONVERSATION_META",
+        payload: {
+          conversationId: convId,
+          patch: {
+            lastMessage: uiMsg.text,
+            lastMessageAt: uiMsg.timestamp,
+          },
+        },
+      });
+    };
+
+    const handleMessageStatus = ({
+      conversationId,
+      messageId,
+      status,
+    }) => {
+      const convId = String(conversationId);
+      if (!convId || !messageId || !status) return;
+
+      dispatch({
+        type: "UPDATE_MESSAGE_STATUS",
+        payload: {
+          conversationId: convId,
+          messageId,
+          status,
+        },
+      });
+    };
+
+    socket.on("newMessage", handleNewMessage);
+    socket.on("messageAck", handleMessageAck);
+    socket.on("messageStatus", handleMessageStatus);
+
+    return () => {
+      socket.off("newMessage", handleNewMessage);
+      socket.off("messageAck", handleMessageAck);
+      socket.off("messageStatus", handleMessageStatus);
+    };
+  }, [socket, activeConversationId]);
+
+  // --- fetch conversations on mount ---
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const data = await getConversations();
+
+        const normalized = (data || []).map((c) => {
+          const id = String(c._id || c.id);
+          return {
+            ...c,
+            id,
+            name:
+              c.name ||
+              c.displayName ||
+              c.phone ||
+              "Unknown",
+            phone: c.phone,
+            lastMessage: c.lastMessage || "",
+            lastMessageAt: c.updatedAt || c.createdAt,
+            unread: c.unreadCount || 0,
+          };
         });
-    }, [conversations, searchQuery]);
 
-    // conversations mapped for ChatLayout
-    const layoutConversations = useMemo(
-        () =>
-            filtered.map((c) => ({
-                id: String(c.id),
-                name: c.name,
-                phone: c.phone,
-                lastMessage: c.lastMessage,
-                lastMessageAt: c.lastMessageAt,
-                unread: c.unread || 0,
-                initials: (c.name || c.phone || "?").slice(0, 2).toUpperCase(),
-            })),
-        [filtered]
-    );
+        dispatch({
+          type: "SET_CONVERSATIONS",
+          payload: normalized,
+        });
 
-    // messages mapped for ChatLayout
-    const layoutMessages = useMemo(() => {
-        if (!selectedChat) return [];
-        return (selectedChat.messages || []).map((m) => ({
-            id: m.id || m._id,
-            text: m.text || m.body,
-            body: m.text || m.body,
-            timestamp: m.time || m.createdAt,
-            direction:
-                m.sender === "agent" || m.senderType === "agent"
-                    ? "outgoing"
-                    : "incoming",
-            fromMe: m.sender === "agent" || m.senderType === "agent",
-            status: m.status || "sent",
-        }));
-    }, [selectedChat]);
-
-    // --------------------------------------
-    // SEND MESSAGE
-    // --------------------------------------
-
-    const handleSend = async (textFromLayout) => {
-        const content = (textFromLayout ?? message).trim();
-        if (!content || !selectedChat) return;
-
-        const currentChatId = selectedChat.id;
-        const time = new Date().toISOString();
-
-        const optimisticMessage = {
-            id: Date.now(),
-            conversationId: currentChatId,
-            text: content,
-            sender: "agent",
-            time,
-            status: "sending",
-        };
-
-        setConversations((prev) =>
-            prev.map((c) =>
-                String(c.id) === String(currentChatId)
-                    ? {
-                          ...c,
-                          messages: [...(c.messages || []), optimisticMessage],
-                          lastMessage: content,
-                          lastMessageAt: time,
-                      }
-                    : c
-            )
-        );
-
-        setMessage("");
-
-        try {
-            const saved = await sendMessage(
-                currentChatId,
-                selectedChat.phone,
-                content
-            );
-
-            const uiSaved = {
-                id: saved._id,
-                conversationId: String(saved.conversationId),
-                text: saved.body,
-                sender: saved.senderType,
-                time: saved.createdAt,
-                status: saved.status || "sent",
-            };
-
-            setConversations((prev) =>
-                prev.map((c) =>
-                    String(c.id) === String(currentChatId)
-                        ? {
-                              ...c,
-                              lastMessage: uiSaved.text,
-                              lastMessageAt: uiSaved.time,
-                              messages: (c.messages || []).map((m) =>
-                                  m.id === optimisticMessage.id ? uiSaved : m
-                              ),
-                          }
-                        : c
-                )
-            );
-        } catch (err) {
-            console.error("Failed to send message:", err);
-
-            setConversations((prev) =>
-                prev.map((c) =>
-                    String(c.id) === String(currentChatId)
-                        ? {
-                              ...c,
-                              messages: (c.messages || []).map((m) =>
-                                  m.id === optimisticMessage.id
-                                      ? { ...m, status: "failed" }
-                                      : m
-                              ),
-                          }
-                        : c
-                )
-            );
+        if (normalized.length > 0) {
+          dispatch({
+            type: "SET_ACTIVE_CONVERSATION",
+            payload: normalized[0].id,
+          });
         }
+      } catch (err) {
+        console.error(
+          "getConversations failed:",
+          err
+        );
+      }
     };
 
-    //---------------------------------------
-    // Handle buttons
-    //---------------------------------------
+    load();
+  }, []);
 
-    const handleAttachClick = () => {
-        fileInputRef.current?.click();
+  // fetch messages when active chat changes
+  useEffect(() => {
+    if (!activeConversationId) return;
+
+    const loadMessages = async () => {
+      try {
+        const msgs =
+          await getConversationMessages(
+            activeConversationId
+          );
+
+        const uiMessages = (msgs || []).map((m) => {
+          const senderType =
+            m.senderType || m.sender;
+          return {
+            id: m._id,
+            clientId: m.clientId || undefined,
+            conversationId: String(m.conversationId),
+            text: m.body,
+            body: m.body,
+            senderType,
+            fromMe: senderType === "agent",
+            from:
+              senderType === "agent"
+                ? "business"
+                : "customer",
+            timestamp: m.createdAt,
+            status: m.status || "sent",
+            mediaUrl: m.mediaUrl,
+            msgId: m.msgId,
+          };
+        });
+
+        dispatch({
+          type: "SET_MESSAGES_FOR_CONV",
+          payload: {
+            conversationId:
+              String(activeConversationId),
+            messages: uiMessages,
+          },
+        });
+      } catch (err) {
+        console.log(
+          "getConversationMessages failed, keeping existing messages"
+        );
+      }
     };
 
-    const handleFileSelected = async (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
+    loadMessages();
+  }, [activeConversationId]);
 
-        setPendingFile(file);
+  const filteredConversations = useMemo(() => {
+    if (!searchQuery.trim()) return conversations;
+    const q = searchQuery.toLowerCase();
 
-        // TODO: call backend sendImage/sendDocument depending on file type
-        // Example:
-        // await sendImage(selectedChatId, selectedChat.phone, file);
+    return conversations.filter((c) => {
+      const name =
+        (c.name || "").toLowerCase();
+      const last =
+        (c.lastMessage || "").toLowerCase();
+      const phone =
+        (c.phone || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        last.includes(q) ||
+        phone.includes(q)
+      );
+    });
+  }, [conversations, searchQuery]);
+
+  const layoutConversations = useMemo(
+    () =>
+      filteredConversations.map((c) => ({
+        id: String(c.id),
+        _id: c._id,
+        name: c.name,
+        phone: c.phone,
+        lastMessage: c.lastMessage,
+        lastMessageAt: c.lastMessageAt,
+        unread: c.unread || c.unreadCount || 0,
+        initials: (c.name || c.phone || "?")
+          .slice(0, 2)
+          .toUpperCase(),
+      })),
+    [filteredConversations]
+  );
+
+  const layoutMessages = useMemo(
+    () =>
+      activeMessages.map((m) => ({
+        id: m.id || m._id,
+        clientId: m.clientId,
+        text: m.text || m.body,
+        body: m.text || m.body,
+        timestamp:
+          m.timestamp ||
+          m.time ||
+          m.createdAt,
+        senderType: m.senderType || m.sender,
+        fromMe: m.fromMe,
+        from: m.from,
+        status: m.status || "sent",
+        mediaUrl: m.mediaUrl,
+        msgId: m.msgId,
+      })),
+    [activeMessages]
+  );
+
+  const handleSelectConversation = (convId) => {
+    dispatch({
+      type: "SET_ACTIVE_CONVERSATION",
+      payload: convId,
+    });
+
+    dispatch({
+      type: "UPDATE_CONVERSATION_META",
+      payload: {
+        conversationId: convId,
+        patch: { unread: 0, unreadCount: 0 },
+      },
+    });
+  };
+
+  const handleSend = (textFromLayout) => {
+    const content = (textFromLayout ?? composerValue).trim();
+    if (!content || !activeConversation) return;
+
+    const convId = String(activeConversation.id);
+    const time = new Date().toISOString();
+
+    const clientId =
+      "tmp-" +
+      (crypto.randomUUID
+        ? crypto.randomUUID()
+        : Date.now());
+
+    const optimisticMessage = {
+      clientId,
+      conversationId: convId,
+      text: content,
+      body: content,
+      senderType: "agent",
+      fromMe: true,
+      from: "business",
+      timestamp: time,
+      status: "sending",
     };
 
-    const handleEmojiSelect = (emoji) => {
-        setMessage((prev) => prev + emoji);
-        setShowEmojiPicker(false);
-    };
+    dispatch({
+      type: "ADD_LOCAL_MESSAGE",
+      payload: {
+        conversationId: convId,
+        message: optimisticMessage,
+      },
+    });
 
-    // --------------------------------------
-    // RENDER
-    // --------------------------------------
+    dispatch({
+      type: "UPDATE_CONVERSATION_META",
+      payload: {
+        conversationId: convId,
+        patch: {
+          lastMessage: content,
+          lastMessageAt: time,
+        },
+      },
+    });
 
-    return (
-        <div className="h-screen flex bg-gray-100">
-            <Sidebar
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
+    if (socket) {
+      socket.emit("message:send", {
+        clientId,
+        conversationId: convId,
+        text: content,
+      });
+    }
+  };
+
+  const handleAttachClick = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileSelected = async (e) => {
+    const file = e.target.files[0];
+    if (!file || !activeConversationId) return;
+    // TODO: integrate sendImage / sendDocument via REST
+  };
+
+  const handleEmojiSelect = (emoji) => {
+    dispatch({
+      type: "SET_COMPOSER",
+      payload: composerValue + emoji,
+    });
+    setShowEmojiPicker(false);
+  };
+
+  return (
+    <div className="h-screen flex bg-gray-100">
+      <Sidebar
+        sidebarOpen={sidebarOpen}
+        setSidebarOpen={setSidebarOpen}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+      />
+
+      <div className="flex-1 flex min-w-0">
+        {activeTab === "chats" && (
+          <div className="flex-1 min-w-0 relative">
+            <ChatLayout
+              conversations={layoutConversations}
+              activeConversationId={activeConversationId}
+              onSelectConversation={
+                handleSelectConversation
+              }
+              messages={layoutMessages}
+              onSendMessage={handleSend}
+              composerValue={composerValue}
+              setComposerValue={(v) =>
+                dispatch({
+                  type: "SET_COMPOSER",
+                  payload: v,
+                })
+              }
+              onAttachClick={handleAttachClick}
+              onEmojiClick={() =>
+                setShowEmojiPicker((v) => !v)
+              }
+              contactName={activeConversation?.name}
+              contactPhone={activeConversation?.phone}
             />
 
-            <div className="flex-1 flex min-w-0">
-                {activeTab === "chats" && (
-                    <div className="flex-1 min-w-0">
-                        <ChatLayout
-                            conversations={conversations}
-                            activeConversationId={selectedChatId}
-                            onSelectConversation={setSelectedChatId}
-                            messages={selectedChat?.messages || []}
-                            onSendMessage={handleSend}
-                            composerValue={message}
-                            setComposerValue={setMessage}
-                            onAttachClick={handleAttachClick}
-                            onEmojiClick={() => setShowEmojiPicker((v) => !v)}
-                            contactName={selectedChat?.name}
-                            contactPhone={selectedChat?.phone}
-                        />
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: "none" }}
+              onChange={handleFileSelected}
+            />
 
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            style={{ display: "none" }}
-                            onChange={handleFileSelected}
-                        />
+            {showEmojiPicker && (
+              <div className="absolute bottom-16 right-4 z-50">
+                {/* <EmojiPicker
+                  onEmojiClick={(e) =>
+                    handleEmojiSelect(e.emoji)
+                  }
+                /> */}
+              </div>
+            )}
+          </div>
+        )}
 
-                        {showEmojiPicker && (
-                            <EmojiPicker
-                                onEmojiClick={(e) => handleEmojiSelect(e.emoji)}
-                            />
-                        )}
-                    </div>
-                )}
+        {activeTab === "broadcast" && <BroadcastView />}
 
-                {activeTab === "broadcast" && <BroadcastView />}
+        {activeTab === "analytics" && (
+          <AnalyticsView
+            stats={ANALYTICS_STATS}
+            messageVolume={MESSAGE_VOLUME}
+            maxVolume={maxVolume}
+          />
+        )}
 
-                {activeTab === "analytics" && (
-                    <AnalyticsView
-                        stats={ANALYTICS_STATS}
-                        messageVolume={MESSAGE_VOLUME}
-                        maxVolume={maxVolume}
-                    />
-                )}
+        {activeTab === "contacts" && (
+          <ContactsPage
+            onOpenConversation={(conv) => {
+              if (!conv?._id && !conv?.id) return;
+              const id = String(conv._id || conv.id);
+              setActiveTab("chats");
+              dispatch({
+                type: "SET_ACTIVE_CONVERSATION",
+                payload: id,
+              });
+            }}
+          />
+        )}
 
-                {activeTab === "contacts" && (
-                    <ContactsPage
-                        onOpenConversation={(conv) => {
-                            if (!conv?._id && !conv?.id) return;
-                            const id = String(conv._id || conv.id);
-                            setActiveTab("chats");
-                            setSelectedChatId(id);
-                        }}
-                    />
-                )}
-
-                {activeTab === "settings" && <SettingsView />}
-            </div>
-        </div>
-    );
+        {activeTab === "settings" && <SettingsView />}
+      </div>
+    </div>
+  );
 };
 
 export default WhatsAppDashboard;

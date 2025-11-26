@@ -17,7 +17,10 @@ function formatTime(ts) {
   if (!ts) return "";
   const date = new Date(ts);
   if (Number.isNaN(date.getTime())) return "";
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return date.toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
 }
 
 function formatDayLabel(ts) {
@@ -32,10 +35,15 @@ function formatDayLabel(ts) {
     today.getMonth(),
     today.getDate()
   );
-  const msgMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const msgMidnight = new Date(
+    d.getFullYear(),
+    d.getMonth(),
+    d.getDate()
+  );
 
   const diffDays =
-    (todayMidnight.getTime() - msgMidnight.getTime()) /
+    (todayMidnight.getTime() -
+      msgMidnight.getTime()) /
     (1000 * 60 * 60 * 24);
 
   if (diffDays === 0) return "Today";
@@ -45,9 +53,10 @@ function formatDayLabel(ts) {
 }
 
 function MessageBubble({ msg }) {
-  // Normalize fields coming from backend / UI mapping
-  const senderType = msg.senderType || msg.sender || msg.role;
-  const timestamp = msg.timestamp || msg.time || msg.createdAt;
+  const senderType =
+    msg.senderType || msg.sender || msg.role;
+  const timestamp =
+    msg.timestamp || msg.time || msg.createdAt;
 
   const isOutgoing =
     senderType === "agent" ||
@@ -55,19 +64,18 @@ function MessageBubble({ msg }) {
     msg.from === "business" ||
     msg.fromMe === true;
 
-  const status = msg.status; // "sending" | "sent" | "delivered" | "read" | "failed"
+  const status = msg.status;
   const text = msg.text ?? msg.body ?? "";
 
-  if (!text) {
-    // Guard against empty bubbles
-    return null;
-  }
+  if (!text) return null;
 
   return (
     <div
       className={
         "wa-message-row " +
-        (isOutgoing ? "wa-message-row--outgoing" : "wa-message-row--incoming")
+        (isOutgoing
+          ? "wa-message-row--outgoing"
+          : "wa-message-row--incoming")
       }
     >
       <div
@@ -76,22 +84,35 @@ function MessageBubble({ msg }) {
           (isOutgoing
             ? "wa-message-bubble--outgoing"
             : "wa-message-bubble--incoming") +
-          (status === "sending" ? " wa-message-bubble--sending" : "")
+          (status === "sending"
+            ? " wa-message-bubble--sending"
+            : "")
         }
       >
         <div className="wa-message-text">{text}</div>
         <div className="wa-message-meta">
-          <span className="wa-message-time">{formatTime(timestamp)}</span>
+          <span className="wa-message-time">
+            {formatTime(timestamp)}
+          </span>
           {isOutgoing && (
             <span className="wa-message-status">
-              {status === "sending" && <span className="wa-sending-dot" />}
+              {status === "sending" && (
+                <span className="wa-sending-dot" />
+              )}
               {status === "sent" && <Check size={14} />}
-              {status === "delivered" && <CheckCheck size={14} />}
+              {status === "delivered" && (
+                <CheckCheck size={14} />
+              )}
               {status === "read" && (
-                <CheckCheck size={14} className="wa-message-status--read" />
+                <CheckCheck
+                  size={14}
+                  className="wa-message-status--read"
+                />
               )}
               {status === "failed" && (
-                <span className="wa-message-failed">!</span>
+                <span className="wa-message-failed">
+                  !
+                </span>
               )}
             </span>
           )}
@@ -117,12 +138,12 @@ const ChatLayout = ({
   const listRef = useRef(null);
   const bottomRef = useRef(null);
 
-  // auto-scroll when messages change
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({
+      behavior: "smooth",
+    });
   }, [messages]);
 
-  // normalize active conversation by _id or id
   const activeConversation =
     conversations.find(
       (c) =>
@@ -150,9 +171,17 @@ const ChatLayout = ({
   let currentDay = null;
 
   (messages || []).forEach((msg, idx) => {
-    const timestamp = msg.timestamp || msg.time || msg.createdAt;
+    const timestamp =
+      msg.timestamp || msg.time || msg.createdAt;
     const dayLabel = formatDayLabel(timestamp);
-    const baseId = msg.id || msg._id || msg.msgId || idx;
+
+    // CRITICAL: prefer clientId so optimistic bubble stays
+    const baseId =
+      msg.clientId ||
+      msg.id ||
+      msg._id ||
+      msg.msgId ||
+      idx;
 
     if (dayLabel && dayLabel !== currentDay) {
       currentDay = dayLabel;
@@ -165,14 +194,14 @@ const ChatLayout = ({
 
     groupedByDay.push({
       type: "msg",
-      data: { ...msg, timestamp }, // ensure timestamp is always set
+      data: { ...msg, timestamp },
       id: `msg-${baseId}`,
     });
   });
 
   return (
     <div className="wa-shell">
-      {/* LEFT: conversations */}
+      {/* LEFT */}
       <aside className="wa-sidebar">
         <div className="wa-sidebar-header">
           <h1 className="wa-app-title">Inbox</h1>
@@ -184,19 +213,27 @@ const ChatLayout = ({
             type="text"
             placeholder="Search conversations"
             className="wa-search-input"
-            // hook real search later in Dashboard; keep no-op here
             onChange={() => {}}
           />
         </div>
 
-        <div className="wa-conversation-list" ref={listRef}>
+        <div
+          className="wa-conversation-list"
+          ref={listRef}
+        >
           {conversations.map((conv) => {
             const convId = conv._id || conv.id;
             const displayName =
-              conv.name || conv.displayName || conv.phone || "Unknown";
-            const lastMessagePreview = conv.lastMessage || "";
+              conv.name ||
+              conv.displayName ||
+              conv.phone ||
+              "Unknown";
+            const lastMessagePreview =
+              conv.lastMessage || "";
             const lastMessageAt =
-              conv.lastMessageAt || conv.updatedAt || conv.createdAt;
+              conv.lastMessageAt ||
+              conv.updatedAt ||
+              conv.createdAt;
             const unread =
               conv.unreadCount !== undefined
                 ? conv.unreadCount
@@ -207,7 +244,8 @@ const ChatLayout = ({
                 key={convId}
                 className={
                   "wa-conversation-item" +
-                  (String(convId) === String(activeConversationId)
+                  (String(convId) ===
+                  String(activeConversationId)
                     ? " wa-conversation-item--active"
                     : "")
                 }
@@ -230,7 +268,8 @@ const ChatLayout = ({
                   </div>
                   <div className="wa-conversation-bottom-row">
                     <span className="wa-conversation-preview">
-                      {lastMessagePreview || "No messages yet"}
+                      {lastMessagePreview ||
+                        "No messages yet"}
                     </span>
                     {unread > 0 && (
                       <span className="wa-unread-badge">
@@ -245,11 +284,10 @@ const ChatLayout = ({
         </div>
       </aside>
 
-      {/* RIGHT: active chat */}
+      {/* RIGHT */}
       <section className="wa-chat-area">
         {activeConversation ? (
           <>
-            {/* Chat header */}
             <header className="wa-chat-header">
               <div className="wa-chat-header-left">
                 <div className="wa-avatar wa-avatar--lg">
@@ -267,35 +305,46 @@ const ChatLayout = ({
                       activeConversation.phone}
                   </div>
                   <div className="wa-chat-subtitle">
-                    {contactPhone || activeConversation.phone}
+                    {contactPhone ||
+                      activeConversation.phone}
                   </div>
                 </div>
               </div>
               <div className="wa-chat-header-actions">
-                <button className="wa-icon-button" title="Call">
+                <button
+                  className="wa-icon-button"
+                  title="Call"
+                >
                   <Phone size={18} />
                 </button>
-                <button className="wa-icon-button" title="More">
+                <button
+                  className="wa-icon-button"
+                  title="More"
+                >
                   <MoreVertical size={18} />
                 </button>
               </div>
             </header>
 
-            {/* Messages */}
             <div className="wa-chat-messages">
               {groupedByDay.map((item) =>
                 item.type === "day" ? (
-                  <div key={item.id} className="wa-day-separator">
+                  <div
+                    key={item.id}
+                    className="wa-day-separator"
+                  >
                     <span>{item.label}</span>
                   </div>
                 ) : (
-                  <MessageBubble key={item.id} msg={item.data} />
+                  <MessageBubble
+                    key={item.id}
+                    msg={item.data}
+                  />
                 )
               )}
               <div ref={bottomRef} />
             </div>
 
-            {/* Composer */}
             <footer className="wa-chat-composer">
               <button
                 className="wa-icon-button"
@@ -317,7 +366,9 @@ const ChatLayout = ({
                 className="wa-composer-input"
                 placeholder="Type a message"
                 value={composerValue}
-                onChange={(e) => setComposerValue(e.target.value)}
+                onChange={(e) =>
+                  setComposerValue(e.target.value)
+                }
                 onKeyDown={handleKeyDown}
                 rows={1}
               />
@@ -325,12 +376,15 @@ const ChatLayout = ({
               <button
                 className={
                   "wa-send-button" +
-                  (composerValue && composerValue.trim()
+                  (composerValue &&
+                  composerValue.trim()
                     ? " wa-send-button--active"
                     : "")
                 }
                 onClick={handleSend}
-                disabled={!composerValue || !composerValue.trim()}
+                disabled={
+                  !composerValue || !composerValue.trim()
+                }
                 title="Send"
               >
                 <Send size={18} />
