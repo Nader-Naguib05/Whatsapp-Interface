@@ -57,39 +57,23 @@ function getMessageKey(msg, idx) {
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
     const timestamp = msg.timestamp || msg.time || msg.createdAt;
+    const mediaUrl = msg.mediaUrl;
+    const mediaType = msg.mediaType || "";
+    const fileName = msg.fileName || msg.filename || "Attachment";
 
     const isOutgoing =
         senderType === "agent" ||
-        senderType === "business" ||
         msg.from === "business" ||
         msg.fromMe === true;
 
-    const status = msg.status;
     const text = msg.text ?? msg.body ?? "";
-    const mediaUrl = msg.mediaUrl;
-    const mediaType = msg.mediaType;
-
-    if (!text && !mediaUrl) return null;
-
-    const bubbleTitle = [
-        isOutgoing ? "Sent" : "Received",
-        timestamp ? `• ${formatTime(timestamp)}` : "",
-        status ? `• Status: ${status}` : "",
-    ]
-        .filter(Boolean)
-        .join(" ");
+    const status = msg.status || "sent";
 
     const handleRetry = () => {
         if (status === "failed" && onRetryMessage) {
             onRetryMessage(msg);
         }
     };
-
-    const showAsImage =
-        mediaUrl &&
-        (!mediaType ||
-            mediaType === "image" ||
-            (typeof mediaType === "string" && mediaType.startsWith("image/")));
 
     return (
         <div
@@ -99,7 +83,6 @@ function MessageBubble({ msg, onRetryMessage }) {
                     ? "wa-message-row--outgoing"
                     : "wa-message-row--incoming")
             }
-            data-message-id={msg.clientId || msg.id || msg._id || msg.msgId}
         >
             <div
                 className={
@@ -109,45 +92,70 @@ function MessageBubble({ msg, onRetryMessage }) {
                         : "wa-message-bubble--incoming") +
                     (status === "sending" ? " wa-message-bubble--sending" : "")
                 }
-                title={bubbleTitle}
             >
-                {/* MEDIA PREVIEW (enterprise feature) */}
+                {/* ---------- MEDIA PREVIEW ---------- */}
                 {mediaUrl && (
                     <div className="wa-message-media">
-                        {showAsImage ? (
+
+                        {/* IMAGE */}
+                        {mediaType.startsWith("image/") && (
                             <img
                                 src={mediaUrl}
-                                alt="attachment"
-                                className="wa-message-media-image"
+                                alt="image"
+                                className="wa-media-img"
+                                draggable={false}
                             />
-                        ) : (
-                            <a
-                                href={mediaUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="wa-message-media-file"
-                            >
-                                <FileText size={14} />
-                                <span>
-                                    {msg.fileName ||
-                                        msg.filename ||
-                                        "Attachment"}
-                                </span>
-                            </a>
                         )}
+
+                        {/* VIDEO */}
+                        {mediaType.startsWith("video/") && (
+                            <video
+                                src={mediaUrl}
+                                controls
+                                className="wa-media-video"
+                                draggable={false}
+                            />
+                        )}
+
+                        {/* AUDIO */}
+                        {mediaType.startsWith("audio/") && (
+                            <audio
+                                controls
+                                src={mediaUrl}
+                                className="wa-media-audio"
+                            />
+                        )}
+
+                        {/* DOCUMENT / FILE */}
+                        {!mediaType.startsWith("image/") &&
+                            !mediaType.startsWith("video/") &&
+                            !mediaType.startsWith("audio/") && (
+                                <a
+                                    href={mediaUrl}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="wa-media-file"
+                                >
+                                    <FileText size={18} />
+                                    <span>{fileName}</span>
+                                </a>
+                            )}
                     </div>
                 )}
 
+                {/* ---------- TEXT ---------- */}
                 {text && <div className="wa-message-text">{text}</div>}
 
+                {/* ---------- META (Time + Status) ---------- */}
                 <div className="wa-message-meta">
                     <span className="wa-message-time">
                         {formatTime(timestamp)}
                     </span>
+
                     {isOutgoing && (
                         <span className="wa-message-status">
                             {status === "sending" && (
-                                <span className="wa-sending-dot" />
+                                <span className="wa-sending-dot"></span>
                             )}
                             {status === "sent" && <Check size={14} />}
                             {status === "delivered" && <CheckCheck size={14} />}
@@ -162,11 +170,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                                     type="button"
                                     className="wa-message-failed-btn"
                                     onClick={handleRetry}
-                                    title={
-                                        onRetryMessage
-                                            ? "Failed • Click to retry"
-                                            : "Failed"
-                                    }
+                                    title="Failed • Click to retry"
                                 >
                                     <AlertCircle size={14} />
                                 </button>
@@ -178,6 +182,7 @@ function MessageBubble({ msg, onRetryMessage }) {
         </div>
     );
 }
+
 
 const ChatLayout = ({
     conversations = [],

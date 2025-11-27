@@ -919,146 +919,115 @@ const WhatsAppDashboard = () => {
   };
 
   const handleFileSelected = async (e) => {
-    const file = e.target.files[0];
-    // reset input so selecting the same file twice still triggers change
-    e.target.value = "";
-    if (!file || !activeConversationId) return;
+  const file = e.target.files[0];
+  e.target.value = ""; // allow same file again
 
-    const convId = String(activeConversation?.id || activeConversationId);
-    const time = new Date().toISOString();
-    const isImage = file.type.startsWith("image/");
-    const clientId =
-      "file-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
+  if (!file || !activeConversationId) return;
 
-    // local preview
-    const localUrl = URL.createObjectURL(file);
+  const convId = String(activeConversation?.id || activeConversationId);
+  const time = new Date().toISOString();
+  const mime = file.type;
 
-    const optimisticMessage = {
-      clientId,
+  const isImage = mime.startsWith("image/");
+  const isVideo = mime.startsWith("video/");
+  const isAudio = mime.startsWith("audio/");
+  const isDocument = !isImage && !isVideo && !isAudio;
+
+  // create local preview for images/videos
+  const localUrl = URL.createObjectURL(file);
+
+  const clientId = "file-" + (crypto.randomUUID?.() || Date.now());
+
+  const optimistic = {
+    clientId,
+    conversationId: convId,
+    text: isImage ? "[Image]" : isVideo ? "[Video]" : isAudio ? "[Audio]" : file.name,
+    body: isImage ? "[Image]" : isVideo ? "[Video]" : isAudio ? "[Audio]" : file.name,
+    senderType: "agent",
+    fromMe: true,
+    from: "business",
+    timestamp: time,
+    status: "sending",
+    mediaUrl: localUrl,
+    mediaType: mime,
+    fileName: file.name,
+  };
+
+  // show bubble immediately
+  dispatch({
+    type: "ADD_LOCAL_MESSAGE",
+    payload: {
       conversationId: convId,
-      text: isImage ? "[image]" : file.name,
-      body: isImage ? "[image]" : file.name,
-      senderType: "agent",
-      fromMe: true,
-      from: "business",
-      timestamp: time,
-      status: "sending",
-      mediaUrl: localUrl,
-      mediaType: isImage ? "image" : "document",
-      fileName: file.name,
-    };
+      message: optimistic,
+    },
+  });
 
-    // ensure conversation exists in sidebar for brand-new convs
-    if (!activeConversation) {
-      dispatch({
-        type: "UPSERT_CONVERSATION_TOP",
-        payload: {
-          conversationId: convId,
-          data: {
-            id: convId,
-            name: "New contact",
-            phone: "",
-            lastMessage: optimisticMessage.text,
-            lastMessageAt: time,
-            unread: 0,
-            unreadCount: 0,
-          },
-        },
-      });
-    }
-
-    // add bubble locally
-    dispatch({
-      type: "ADD_LOCAL_MESSAGE",
-      payload: {
-        conversationId: convId,
-        message: optimisticMessage,
+  dispatch({
+    type: "UPSERT_CONVERSATION_TOP",
+    payload: {
+      conversationId: convId,
+      data: {
+        lastMessage: optimistic.text,
+        lastMessageAt: time,
+        unread: 0,
+        unreadCount: 0,
       },
+    },
+  });
+
+  try {
+    const formData = new FormData();
+    formData.append("conversationId", convId);
+    formData.append("file", file);
+    formData.append("mime", mime);
+
+    const res = await fetch(`${BACKEND}/messages/upload-media`, {
+      method: "POST",
+      body: formData,
     });
 
-    // update conversation meta & bump to top
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error);
+
+    const server = json.message;
+
+    const uiMsg = {
+      ...optimistic,
+      id: server._id,
+      timestamp: server.createdAt,
+      status: server.status,
+      mediaUrl: server.mediaUrl, // real url from meta
+      msgId: server.msgId,
+    };
+
+    dispatch({
+      type: "SERVER_ACK_MESSAGE",
+      payload: { conversationId: convId, clientId, serverMsg: uiMsg },
+    });
+
     dispatch({
       type: "UPSERT_CONVERSATION_TOP",
       payload: {
         conversationId: convId,
         data: {
-          lastMessage: optimisticMessage.text,
-          lastMessageAt: time,
-          unread: 0,
-          unreadCount: 0,
+          lastMessage: uiMsg.text,
+          lastMessageAt: uiMsg.timestamp,
         },
       },
     });
+  } catch (err) {
+    console.error("Error sending media:", err);
 
-    try {
-      const formData = new FormData();
-      formData.append("conversationId", convId);
-      formData.append("file", file);
-      formData.append("type", isImage ? "image" : "document");
-
-      const res = await fetch(`${BACKEND}/messages/upload`, {
-        method: "POST",
-        body: formData,
-      });
-
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data?.error || "Failed to send media");
-      }
-
-      const serverMsg = data.message;
-
-      const uiMsg = {
-        id: serverMsg._id,
-        clientId,
+    dispatch({
+      type: "UPDATE_MESSAGE_STATUS",
+      payload: {
         conversationId: convId,
-        text: serverMsg.body,
-        body: serverMsg.body,
-        senderType: serverMsg.senderType || "agent",
-        fromMe: true,
-        from: "business",
-        timestamp: serverMsg.createdAt,
-        status: serverMsg.status || "sent",
-        mediaUrl: serverMsg.mediaUrl || localUrl,
-        mediaType: serverMsg.mediaType || (isImage ? "image" : "document"),
-        msgId: serverMsg.msgId,
-        fileName: serverMsg.fileName || file.name,
-      };
-
-      // merge server data into optimistic bubble
-      dispatch({
-        type: "SERVER_ACK_MESSAGE",
-        payload: {
-          conversationId: convId,
-          clientId,
-          serverMsg: uiMsg,
-        },
-      });
-
-      // update lastMessage in convo
-      dispatch({
-        type: "UPSERT_CONVERSATION_TOP",
-        payload: {
-          conversationId: convId,
-          data: {
-            lastMessage: uiMsg.text,
-            lastMessageAt: uiMsg.timestamp,
-          },
-        },
-      });
-    } catch (err) {
-      console.error("Failed to send media:", err);
-
-      dispatch({
-        type: "UPDATE_MESSAGE_STATUS",
-        payload: {
-          conversationId: convId,
-          messageId: clientId,
-          status: "failed",
-        },
-      });
-    }
-  };
+        messageId: clientId,
+        status: "failed",
+      },
+    });
+  }
+};
 
   const handleEmojiSelect = (emojiChar) => {
     dispatch({

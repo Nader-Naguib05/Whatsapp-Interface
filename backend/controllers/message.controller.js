@@ -319,3 +319,123 @@ export async function markAsReadController(req, res) {
       .json({ error: "Failed to mark as read" });
   }
 }
+
+// ---------- upload media (file -> buffer -> meta -> send) ----------
+
+import multer from "multer";
+const upload = multer({ storage: multer.memoryStorage() });
+
+// POST /messages/upload-media
+export const uploadMediaAndSendController = [
+  upload.single("file"),
+  async (req, res) => {
+    try {
+      const { conversationId, mime, clientId } = req.body;
+      const file = req.file;
+
+      if (!file)
+        return res.status(400).json({ error: "No file provided" });
+
+      let conv = null;
+
+      if (!conversationId)
+        return res.status(400).json({ error: "conversationId required" });
+
+      conv = await Conversation.findById(conversationId);
+      if (!conv)
+        return res.status(404).json({ error: "Conversation not found" });
+
+      const targetPhone = conv.phone;
+
+      // 1. Upload binary to WhatsApp API
+      const uploadRes = await axios({
+        method: "POST",
+        url: `https://graph.facebook.com/v20.0/${process.env.META_PHONE_NUMBER_ID}/media`,
+        headers: {
+          Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
+          "Content-Type": "multipart/form-data",
+        },
+        data: {
+          file: {
+            value: file.buffer,
+            options: {
+              filename: file.originalname,
+              contentType: mime || file.mimetype,
+            },
+          },
+          type: mime || file.mimetype,
+        },
+      });
+
+      const mediaId = uploadRes.data.id;
+
+      // Determine WhatsApp message type
+      const mimeType = mime || file.mimetype;
+      let messageType;
+      let msgPayload = {};
+
+      if (mimeType.startsWith("image/")) {
+        messageType = "image";
+        msgPayload.image = { id: mediaId };
+      } else if (mimeType.startsWith("video/")) {
+        messageType = "video";
+        msgPayload.video = { id: mediaId };
+      } else if (mimeType.startsWith("audio/")) {
+        messageType = "audio";
+        msgPayload.audio = { id: mediaId };
+      } else {
+        messageType = "document";
+        msgPayload.document = {
+          id: mediaId,
+          filename: file.originalname,
+        };
+      }
+
+      // 2. Send message through WhatsApp
+      const sendMsgRes = await axios.post(
+        `https://graph.facebook.com/v20.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
+        {
+          messaging_product: "whatsapp",
+          to: targetPhone,
+          type: messageType,
+          ...msgPayload,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const waId =
+        sendMsgRes?.data?.messages?.[0]?.id || null;
+
+      // 3. Save into DB
+      const saved = await Message.create({
+        conversationId: conv._id,
+        from: "business",
+        to: targetPhone,
+        senderType: "agent",
+        body: file.originalname,
+        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`,
+        status: "sent",
+        msgId: waId,
+        meta: sendMsgRes.data,
+      });
+
+      // Update convo
+      conv.lastMessage = file.originalname;
+      conv.updatedAt = new Date();
+      await conv.save();
+
+      // 4. Emit real-time ack
+      emitAck(conv._id, saved, clientId);
+
+      return res.json({ ok: true, message: saved });
+    } catch (err) {
+      console.error("uploadMediaAndSend error:", err.response?.data || err);
+      return res.status(500).json({ error: "Failed to send media" });
+    }
+  },
+];

@@ -5,7 +5,8 @@ import {
   sendImageController,
   sendDocumentController,
   sendTemplateController,
-  markAsReadController
+  markAsReadController,
+  uploadMediaAndSendController,
 } from '../controllers/message.controller.js';
 
 const router = express.Router();
@@ -15,5 +16,7 @@ router.post('/sendImage', sendImageController);
 router.post('/sendDocument', sendDocumentController);
 router.post('/sendTemplate', sendTemplateController);
 router.post('/markAsRead', markAsReadController);
+
+router.post("/upload-media", uploadMediaAndSendController);
 
 export default router;
