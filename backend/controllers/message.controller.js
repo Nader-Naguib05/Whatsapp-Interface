@@ -320,15 +320,15 @@ export async function markAsReadController(req, res) {
       .json({ error: "Failed to mark as read" });
   }
 }
-
 // ---------- upload media (file -> buffer -> meta -> send) ----------
 
 import multer from "multer";
+import FormData from "form-data";
 const upload = multer({ storage: multer.memoryStorage() });
 
-// POST /messages/upload-media
 export const uploadMediaAndSendController = [
   upload.single("file"),
+
   async (req, res) => {
     try {
       const { conversationId, mime, clientId } = req.body;
@@ -337,42 +337,47 @@ export const uploadMediaAndSendController = [
       if (!file)
         return res.status(400).json({ error: "No file provided" });
 
-      let conv = null;
-
       if (!conversationId)
         return res.status(400).json({ error: "conversationId required" });
 
-      conv = await Conversation.findById(conversationId);
+      // Fetch conversation
+      const conv = await Conversation.findById(conversationId);
       if (!conv)
         return res.status(404).json({ error: "Conversation not found" });
 
       const targetPhone = conv.phone;
+      const mimeType = mime || file.mimetype;
 
-      // 1. Upload binary to WhatsApp API
-      const uploadRes = await axios({
-        method: "POST",
-        url: `https://graph.facebook.com/v20.0/${process.env.META_PHONE_NUMBER_ID}/media`,
-        headers: {
-          Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
-          "Content-Type": "multipart/form-data",
-        },
-        data: {
-          file: {
-            value: file.buffer,
-            options: {
-              filename: file.originalname,
-              contentType: mime || file.mimetype,
-            },
-          },
-          type: mime || file.mimetype,
-        },
+      // ------------------------------
+      // 1. Upload file buffer to Meta
+      // ------------------------------
+
+      const formData = new FormData();
+      formData.append("file", file.buffer, {
+        filename: file.originalname,
+        contentType: mimeType,
       });
+      formData.append("type", mimeType);
+
+      const uploadRes = await axios.post(
+        `https://graph.facebook.com/v20.0/${process.env.META_PHONE_NUMBER_ID}/media`,
+        formData,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
+            ...formData.getHeaders(),
+          },
+        }
+      );
 
       const mediaId = uploadRes.data.id;
 
-      // Determine WhatsApp message type
-      const mimeType = mime || file.mimetype;
-      let messageType;
+
+      // ------------------------------
+      // 2. Determine message type
+      // ------------------------------
+
+      let messageType = "document";
       let msgPayload = {};
 
       if (mimeType.startsWith("image/")) {
@@ -388,11 +393,15 @@ export const uploadMediaAndSendController = [
         messageType = "document";
         msgPayload.document = {
           id: mediaId,
-          filename: file.originalname,
+          filename: file.originalname.replace(/\s+/g, "_"),
         };
       }
 
-      // 2. Send message through WhatsApp
+
+      // ------------------------------
+      // 3. Send the WhatsApp Message
+      // ------------------------------
+
       const sendMsgRes = await axios.post(
         `https://graph.facebook.com/v20.0/${process.env.META_PHONE_NUMBER_ID}/messages`,
         {
@@ -412,28 +421,42 @@ export const uploadMediaAndSendController = [
       const waId =
         sendMsgRes?.data?.messages?.[0]?.id || null;
 
-      // 3. Save into DB
+
+      // ------------------------------
+      // 4. Save Message to DB
+      // ------------------------------
+
       const saved = await Message.create({
         conversationId: conv._id,
         from: "business",
         to: targetPhone,
         senderType: "agent",
         body: file.originalname,
-        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`,
+        mediaType: mimeType,
+        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`, // requires auth to fetch
         status: "sent",
         msgId: waId,
         meta: sendMsgRes.data,
       });
 
-      // Update convo
       conv.lastMessage = file.originalname;
       conv.updatedAt = new Date();
       await conv.save();
 
-      // 4. Emit real-time ack
+
+      // ------------------------------
+      // 5. Emit real-time ACK to UI
+      // ------------------------------
+
       emitAck(conv._id, saved, clientId);
 
+
+      // ------------------------------
+      // 6. Respond
+      // ------------------------------
+
       return res.json({ ok: true, message: saved });
+
     } catch (err) {
       console.error("uploadMediaAndSend error:", err.response?.data || err);
       return res.status(500).json({ error: "Failed to send media" });
