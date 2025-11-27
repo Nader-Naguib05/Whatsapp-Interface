@@ -434,7 +434,7 @@ export const uploadMediaAndSendController = [
         senderType: "agent",
         body: file.originalname,
         mediaType: mimeType,
-        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`,
+        mediaUrl: `${process.env.BASE_URL}/media/${mediaId}`,
         status: "sent",
         msgId: waId,
         meta: sendMsgRes.data,

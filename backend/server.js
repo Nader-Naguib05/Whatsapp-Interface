@@ -13,6 +13,7 @@ import messageRoutes from './routes/messages.js';
 import conversationRoutes from './routes/conversations.js';
 import authRoutes from "./routes/auth.js";
 import broadcastRoutes from "./routes/broadcast.js";
+import mediaRoutes from "./routes/media.js";
 import { setupSockets } from './sockets/chatSocket.js';
 
 const app = express();
@@ -29,6 +30,7 @@ app.use('/webhook', webhookRoutes);
 app.use('/messages', messageRoutes);
 app.use('/conversations', conversationRoutes);
 app.use('/broadcast', broadcastRoutes);
+app.use('/media', mediaRoutes);
 app.use('/auth', authRoutes);
 
 
