@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import Button from "../ui/Button";
 import Input from "../ui/Input";
-import Textarea from "../ui/Textarea"; // kept if you want to extend later
+import Textarea from "../ui/Textarea";
 import {
   Radio,
   Paperclip,
@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../utils/cn";
 
-const API_BASE = "/api/broadcast"; // change to "/broadcast" if you mounted routes without /api
+const API_BASE = "/api/broadcast"; // change to "/broadcast" if your backend is mounted there
 
 function formatDate(d) {
   if (!d) return "-";
@@ -83,7 +83,7 @@ const BroadcastView = () => {
     try {
       setLoadingBatches(true);
       setBatchesError("");
-      const res = await axios.get(`${API_BASE}/batches`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/broadcast/batches`);
       setBatches(res.data || []);
     } catch (err) {
       setBatchesError(
@@ -96,10 +96,10 @@ const BroadcastView = () => {
 
   const fetchBatchDetails = async (id) => {
     if (!id) return;
-    try:
+    try {
       setLoadingBatchDetails(true);
       setBatchDetailsError("");
-      const res = await axios.get(`${API_BASE}/batches/${id}`);
+      const res = await axios.get(`${import.meta.env.VITE_API_URL}/broadcast/batches/${id}`);
       setSelectedBatch(res.data || null);
     } catch (err) {
       setBatchDetailsError(
@@ -120,7 +120,6 @@ const BroadcastView = () => {
     if (selectedBatchId) {
       fetchBatchDetails(selectedBatchId);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBatchId]);
 
   // --------------- HANDLERS ---------------
@@ -138,7 +137,6 @@ const BroadcastView = () => {
       return;
     }
 
-    // 5MB max (you can tweak it)
     if (f.size > 5 * 1024 * 1024) {
       setFileError("Max file size is 5MB");
       setFile(null);
@@ -187,7 +185,7 @@ const BroadcastView = () => {
       if (batchName.trim()) formData.append("batchName", batchName.trim());
       formData.append("components", JSON.stringify(components));
 
-      const res = await axios.post(`${API_BASE}/send`, formData, {
+      const res = await axios.post(`${import.meta.env.VITE_API_URL}/broadcast/send`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -199,7 +197,6 @@ const BroadcastView = () => {
       setTemplateName("");
       setComponentsRaw("");
 
-      // refresh list
       fetchBatches();
     } catch (err) {
       setSendError(
@@ -254,8 +251,8 @@ const BroadcastView = () => {
                 </h3>
                 <p className="text-xs text-green-700 mt-1">
                   Each contact receives a separate message. Recipients never see
-                  each other, and delivery is throttled to protect your
-                  WhatsApp number.
+                  each other, and delivery is throttled to protect your WhatsApp
+                  number.
                 </p>
               </div>
             </div>
@@ -675,10 +672,9 @@ const BroadcastView = () => {
                     </div>
                   </div>
 
-                  {/* Placeholder for future logs / errors list */}
                   <div className="mt-2 text-[11px] text-gray-500">
-                    Detailed per-recipient logs can be added here later (e.g.
-                    export failed numbers, see error reasons).
+                    Later you can add per-recipient logs here (export failed
+                    numbers, see error reasons, etc.).
                   </div>
                 </div>
               )}
