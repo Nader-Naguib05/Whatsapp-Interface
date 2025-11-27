@@ -223,6 +223,17 @@ const WhatsAppDashboard = () => {
   const fileInputRef = useRef(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
+  // NEW: conversation search, typing, presence, global unread, notifications
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [isCustomerTyping, setIsCustomerTyping] = useState(false);
+  const [typingConversationId, setTypingConversationId] = useState(null);
+  const [contactStatus, setContactStatus] = useState(null);
+  const [globalUnread, setGlobalUnread] = useState(0);
+
+  const notificationAudioRef = useRef(null);
+  const hasWindowFocusRef = useRef(true);
+  const typingTimeoutRef = useRef(null);
+
   const [state, dispatch] = useReducer(reducer, initialState);
   const {
     conversations,
@@ -243,6 +254,65 @@ const WhatsAppDashboard = () => {
     hasMore: false,
     loading: false,
   };
+
+  // --- window focus tracking for smarter notifications ---
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const handleFocus = () => {
+      hasWindowFocusRef.current = true;
+    };
+    const handleBlur = () => {
+      hasWindowFocusRef.current = false;
+    };
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("blur", handleBlur);
+    return () => {
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("blur", handleBlur);
+    };
+  }, []);
+
+  // --- notification sound setup (place file at /public/sounds/new-message.mp3) ---
+  useEffect(() => {
+    if (typeof Audio === "undefined") return;
+    try {
+      notificationAudioRef.current = new Audio("/sounds/new-message.mp3");
+    } catch {
+      notificationAudioRef.current = null;
+    }
+  }, []);
+
+  const triggerNewMessageNotification = () => {
+    const audio = notificationAudioRef.current;
+    if (!audio) return;
+    if (!hasWindowFocusRef.current) {
+      audio
+        .play()
+        .catch(() => {
+          // ignore autoplay errors
+        });
+    }
+  };
+
+  // --- global unread + dynamic document title ---
+  useEffect(() => {
+    const total =
+      (conversations || []).reduce(
+        (sum, c) => sum + (c.unreadCount || c.unread || 0),
+        0
+      ) || 0;
+    setGlobalUnread(total);
+  }, [conversations]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+    const baseTitle = "WhatsApp Inbox";
+    if (globalUnread > 0) {
+      document.title = `(${globalUnread}) ${baseTitle}`;
+    } else {
+      document.title = baseTitle;
+    }
+  }, [globalUnread]);
 
   // --- socket setup ---
   useEffect(() => {
@@ -352,7 +422,7 @@ const WhatsAppDashboard = () => {
     }
   };
 
-  // socket events
+  // socket events (messages, statuses, typing, presence)
   useEffect(() => {
     if (!socket) return;
 
@@ -360,6 +430,11 @@ const WhatsAppDashboard = () => {
       if (!conversation) return;
       const convId = String(conversation._id || conversation.id);
       if (!convId) return;
+
+      const computedUnread =
+        conversation.unreadCount ??
+        conversation.unread ??
+        1; // default 1 for first unseen message
 
       dispatch({
         type: "UPSERT_CONVERSATION_TOP",
@@ -381,8 +456,10 @@ const WhatsAppDashboard = () => {
               conversation.createdAt ||
               extra.lastMessageAt ||
               new Date().toISOString(),
-            unread: conversation.unread || conversation.unreadCount || 0,
-            unreadCount: conversation.unreadCount || conversation.unread || 0,
+            unread:
+              String(activeConversationId) === convId ? 0 : computedUnread,
+            unreadCount:
+              String(activeConversationId) === convId ? 0 : computedUnread,
           },
         },
       });
@@ -416,6 +493,10 @@ const WhatsAppDashboard = () => {
       });
 
       const isActive = String(activeConversationId) === convId;
+      const computedUnread =
+        conversation.unreadCount ??
+        conversation.unread ??
+        1; // TRUST backend, no +1 to avoid double increment
 
       // bump conversation to top + update meta (including new convs)
       dispatch({
@@ -433,15 +514,19 @@ const WhatsAppDashboard = () => {
             phone: conversation.phone,
             lastMessage: uiMsg.text,
             lastMessageAt: uiMsg.timestamp,
-            unread: isActive
-              ? 0
-              : (conversation.unread || conversation.unreadCount || 0) + 1,
-            unreadCount: isActive
-              ? 0
-              : (conversation.unreadCount || conversation.unread || 0) + 1,
+            unread: isActive ? 0 : computedUnread,
+            unreadCount: isActive ? 0 : computedUnread,
           },
         },
       });
+
+      const isCustomer =
+        senderType !== "agent" && senderType !== "business" && !uiMsg.fromMe;
+
+      // sound only for customer messages when window not focused or thread inactive
+      if (isCustomer && (!isActive || !hasWindowFocusRef.current)) {
+        triggerNewMessageNotification();
+      }
     };
 
     const handleMessageAck = (serverMsg) => {
@@ -504,6 +589,46 @@ const WhatsAppDashboard = () => {
       upsertConversationFromSocket(conversation);
     };
 
+    // NEW: typing indicator from backend
+    const handleCustomerTyping = ({ conversationId }) => {
+      const convId = String(conversationId);
+      if (!convId) return;
+
+      setTypingConversationId(convId);
+
+      if (String(activeConversationId) === convId) {
+        setIsCustomerTyping(true);
+      }
+
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsCustomerTyping(false);
+        setTypingConversationId(null);
+      }, 3000);
+    };
+
+    // NEW: contact online/offline status from backend
+    const handleContactStatus = ({ conversationId, status }) => {
+      const convId = String(conversationId);
+      if (!convId) return;
+
+      dispatch({
+        type: "UPDATE_CONVERSATION_META",
+        payload: {
+          conversationId: convId,
+          patch: { contactStatus: status },
+        },
+      });
+
+      if (String(activeConversationId) === convId) {
+        setContactStatus(
+          status === "online" || status === "offline" ? status : null
+        );
+      }
+    };
+
     socket.on("newMessage", handleNewMessage);
     socket.on("messageAck", handleMessageAck);
     socket.on("messageStatus", handleMessageStatus);
@@ -512,14 +637,44 @@ const WhatsAppDashboard = () => {
     socket.on("conversation:new", handleConversationCreated);
     socket.on("conversationCreated", handleConversationCreated);
 
+    // NEW events
+    socket.on("customerTyping", handleCustomerTyping);
+    socket.on("contactStatus", handleContactStatus);
+
     return () => {
       socket.off("newMessage", handleNewMessage);
       socket.off("messageAck", handleMessageAck);
       socket.off("messageStatus", handleMessageStatus);
       socket.off("conversation:new", handleConversationCreated);
       socket.off("conversationCreated", handleConversationCreated);
+      socket.off("customerTyping", handleCustomerTyping);
+      socket.off("contactStatus", handleContactStatus);
     };
   }, [socket, activeConversationId]);
+
+  // --- keep header presence in sync when switching convs ---
+  useEffect(() => {
+    if (!activeConversationId) {
+      setContactStatus(null);
+      return;
+    }
+    const conv = conversations.find(
+      (c) => String(c.id) === String(activeConversationId)
+    );
+    setContactStatus(conv?.contactStatus || null);
+  }, [activeConversationId, conversations]);
+
+  // --- sync typing indicator to current conversation ---
+  useEffect(() => {
+    if (
+      typingConversationId &&
+      String(typingConversationId) === String(activeConversationId)
+    ) {
+      setIsCustomerTyping(true);
+    } else {
+      setIsCustomerTyping(false);
+    }
+  }, [typingConversationId, activeConversationId]);
 
   // --- fetch conversations on mount ---
   useEffect(() => {
@@ -573,9 +728,20 @@ const WhatsAppDashboard = () => {
   }, [activeConversationId]);
 
   const filteredConversations = useMemo(() => {
-    // search handled in ChatLayout; keep identity for now
-    return conversations;
-  }, [conversations]);
+    if (!conversationSearch.trim()) return conversations;
+    const q = conversationSearch.toLowerCase();
+
+    return conversations.filter((c) => {
+      const name = (c.name || c.displayName || "").toLowerCase();
+      const phone = (c.phone || "").toLowerCase();
+      const last = (c.lastMessage || "").toLowerCase();
+      return (
+        name.includes(q) ||
+        phone.includes(q) ||
+        last.includes(q)
+      );
+    });
+  }, [conversations, conversationSearch]);
 
   const layoutConversations = useMemo(
     () =>
@@ -588,6 +754,7 @@ const WhatsAppDashboard = () => {
         lastMessageAt: c.lastMessageAt,
         unread: c.unreadCount || c.unread || 0,
         initials: (c.name || c.phone || "?").slice(0, 2).toUpperCase(),
+        contactStatus: c.contactStatus,
       })),
     [filteredConversations]
   );
@@ -605,7 +772,9 @@ const WhatsAppDashboard = () => {
         from: m.from,
         status: m.status || "sent",
         mediaUrl: m.mediaUrl,
+        mediaType: m.mediaType,
         msgId: m.msgId,
+        fileName: m.fileName || m.filename,
       })),
     [activeMessages]
   );
@@ -710,6 +879,32 @@ const WhatsAppDashboard = () => {
     }
   };
 
+  const handleRetryMessage = (msg) => {
+    if (!socket || !msg) return;
+
+    const convId = String(msg.conversationId || activeConversationId);
+    const content = (msg.text || msg.body || "").trim();
+    if (!convId || !content) return;
+
+    const messageId =
+      msg.clientId || msg.id || msg._id || msg.msgId;
+
+    dispatch({
+      type: "UPDATE_MESSAGE_STATUS",
+      payload: {
+        conversationId: convId,
+        messageId,
+        status: "sending",
+      },
+    });
+
+    socket.emit("message:send", {
+      clientId: msg.clientId,
+      conversationId: convId,
+      text: content,
+    });
+  };
+
   const handleLoadOlderMessages = () => {
     const convId = String(activeConversationId);
     if (!convId) return;
@@ -750,6 +945,7 @@ const WhatsAppDashboard = () => {
       status: "sending",
       mediaUrl: localUrl,
       mediaType: isImage ? "image" : "document",
+      fileName: file.name,
     };
 
     // ensure conversation exists in sidebar for brand-new convs
@@ -826,6 +1022,7 @@ const WhatsAppDashboard = () => {
         mediaUrl: serverMsg.mediaUrl || localUrl,
         mediaType: serverMsg.mediaType || (isImage ? "image" : "document"),
         msgId: serverMsg.msgId,
+        fileName: serverMsg.fileName || file.name,
       };
 
       // merge server data into optimistic bubble
@@ -871,6 +1068,12 @@ const WhatsAppDashboard = () => {
     setShowEmojiPicker(false);
   };
 
+  const handleAddToContacts = (payload) => {
+    // Hook point for CRM/contacts integration
+    console.log("Add to contacts clicked:", payload);
+    setActiveTab("contacts");
+  };
+
   return (
     <div className="h-screen flex bg-gray-100">
       <Sidebar
@@ -903,6 +1106,14 @@ const WhatsAppDashboard = () => {
               hasMoreMessages={activePaging.hasMore}
               isLoadingMore={activePaging.loading}
               onLoadOlderMessages={handleLoadOlderMessages}
+              // NEW enterprise props
+              onSearchChange={setConversationSearch}
+              searchPlaceholder="Search name, phone, or message"
+              isCustomerTyping={isCustomerTyping}
+              customerTypingText="Customer is typing…"
+              contactStatus={contactStatus}
+              onRetryMessage={handleRetryMessage}
+              onAddToContacts={handleAddToContacts}
             />
 
             <input

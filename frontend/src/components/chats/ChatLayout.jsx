@@ -202,12 +202,14 @@ const ChatLayout = ({
     customerTypingText = "Customer is typing…",
     contactStatus, // "online" | "offline" | undefined
     onRetryMessage, // for failed messages
+    onAddToContacts, // new: header 3-dots action
 }) => {
     const listRef = useRef(null);
     const bottomRef = useRef(null);
     const messagesRef = useRef(null);
 
     const [localSearch, setLocalSearch] = useState("");
+    const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
 
     // track last message to avoid breaking scroll when loading history
     const lastMessageKeyRef = useRef(null);
@@ -333,6 +335,21 @@ const ChatLayout = ({
             ? "Offline"
             : null;
 
+    const handleHeaderMenuAddToContacts = () => {
+        setIsHeaderMenuOpen(false);
+        if (!onAddToContacts || !activeConversation) return;
+
+        onAddToContacts({
+            id: activeConversation._id || activeConversation.id,
+            name:
+                contactName ||
+                activeConversation.name ||
+                activeConversation.displayName ||
+                activeConversation.phone,
+            phone: contactPhone || activeConversation.phone,
+        });
+    };
+
     return (
         <div className="wa-shell">
             {/* LEFT */}
@@ -369,6 +386,12 @@ const ChatLayout = ({
                             conv.unreadCount !== undefined
                                 ? conv.unreadCount
                                 : conv.unread || 0;
+                        const presence =
+                            conv.contactStatus === "online"
+                                ? "• Online"
+                                : conv.contactStatus === "offline"
+                                ? "• Offline"
+                                : "";
 
                         return (
                             <button
@@ -403,11 +426,18 @@ const ChatLayout = ({
                                             {lastMessagePreview ||
                                                 "No messages yet"}
                                         </span>
-                                        {unread > 0 && (
-                                            <span className="wa-unread-badge">
-                                                {unread > 99 ? "99+" : unread}
-                                            </span>
-                                        )}
+                                        <div className="wa-conversation-meta-right">
+                                            {presence && (
+                                                <span className="wa-presence-pill">
+                                                    {presence}
+                                                </span>
+                                            )}
+                                            {unread > 0 && (
+                                                <span className="wa-unread-badge">
+                                                    {unread > 99 ? "99+" : unread}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             </button>
@@ -455,13 +485,33 @@ const ChatLayout = ({
                                 >
                                     <Phone size={18} />
                                 </button>
-                                <button
-                                    type="button"
-                                    className="wa-icon-button"
-                                    title="More"
-                                >
-                                    <MoreVertical size={18} />
-                                </button>
+                                <div className="wa-header-menu-wrapper">
+                                    <button
+                                        type="button"
+                                        className="wa-icon-button"
+                                        title="More"
+                                        onClick={() =>
+                                            setIsHeaderMenuOpen(
+                                                (open) => !open
+                                            )
+                                        }
+                                    >
+                                        <MoreVertical size={18} />
+                                    </button>
+                                    {isHeaderMenuOpen && (
+                                        <div className="wa-header-menu">
+                                            <button
+                                                type="button"
+                                                className="wa-header-menu-item"
+                                                onClick={
+                                                    handleHeaderMenuAddToContacts
+                                                }
+                                            >
+                                                Add to contacts
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         </header>
 
