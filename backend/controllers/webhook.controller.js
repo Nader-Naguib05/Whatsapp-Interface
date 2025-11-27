@@ -24,20 +24,16 @@ export async function verifyWebhook(req, res) {
 export async function receiveWebhook(req, res) {
   try {
     const events = parseIncoming(req.body);
-    console.log("Webhook events:", events);
     if (!events.length) return res.sendStatus(200);
 
     const io = getIO();
 
     for (const ev of events) {
-      // ------------------------------
-      // 🟢 Incoming customer message
-      // ------------------------------
+      // 🟢 Incoming message
       if (ev.event === "message") {
         if (!ev.text) continue;
 
-        const conv =
-          await findOrCreateConversationByPhone(ev.from);
+        const conv = await findOrCreateConversationByPhone(ev.from);
 
         const messageDoc = await Message.create({
           conversationId: conv._id,
@@ -46,42 +42,56 @@ export async function receiveWebhook(req, res) {
           senderType: "customer",
           body: ev.text,
           status: "received",
-          createdAt: new Date(
-            Number(ev.timestamp) * 1000
-          ),
+          createdAt: new Date(Number(ev.timestamp) * 1000),
           raw: ev.raw,
           msgId: ev.msgId,
         });
 
+        // Update conversation meta
         conv.lastMessage = ev.text;
+        conv.lastMessageAt = messageDoc.createdAt;
         conv.unreadCount = (conv.unreadCount || 0) + 1;
-        conv.updatedAt = new Date();
         await conv.save();
 
+        const convoPayload = {
+          _id: conv._id,
+          phone: conv.phone,
+          name: conv.name || conv.phone,
+          lastMessage: ev.text,
+          lastMessageAt: messageDoc.createdAt,
+          unreadCount: conv.unreadCount,
+        };
+
+        const msgPayload = {
+          _id: messageDoc._id,
+          conversationId: String(conv._id),
+          body: messageDoc.body,
+          mediaUrl: messageDoc.mediaUrl || null,
+          senderType: "customer",
+          createdAt: messageDoc.createdAt,
+          status: messageDoc.status,
+          msgId: messageDoc.msgId,
+        };
+
+        // 1) NEW conversation event (global)
+        io.emit("conversation:new", convoPayload);
+
+        // 2) New message event (global)
+        io.emit("newMessage", {
+          conversation: convoPayload,
+          message: msgPayload,
+        });
+
+        // 3) Also send to room if agent is inside it
         io.to(String(conv._id)).emit("newMessage", {
-          conversation: {
-            _id: conv._id,
-            phone: conv.phone,
-            name: conv.name || conv.phone,
-          },
-          message: {
-            _id: messageDoc._id,
-            conversationId: String(conv._id),
-            body: messageDoc.body,
-            mediaUrl: messageDoc.mediaUrl || null,
-            senderType: "customer",
-            createdAt: messageDoc.createdAt,
-            status: messageDoc.status,
-            msgId: messageDoc.msgId,
-          },
+          conversation: convoPayload,
+          message: msgPayload,
         });
 
         continue;
       }
 
-      // ------------------------------
-      // 🟣 Delivery / read status
-      // ------------------------------
+      // 🟣 Status updates
       if (ev.event === "status") {
         const { messageId, status } = ev;
         if (!messageId || !status) continue;
@@ -89,21 +99,19 @@ export async function receiveWebhook(req, res) {
         const msg = await Message.findOne({ msgId: messageId });
         if (!msg) continue;
 
-        await Message.updateOne(
-          { msgId: messageId },
-          { status }
-        );
+        await Message.updateOne({ msgId: messageId }, { status });
 
-        io.to(String(msg.conversationId)).emit(
-          "messageStatus",
-          {
-            conversationId: String(msg.conversationId),
-            messageId,
-            status,
-          }
-        );
+        io.emit("messageStatus", {
+          conversationId: String(msg.conversationId),
+          messageId,
+          status,
+        });
 
-        continue;
+        io.to(String(msg.conversationId)).emit("messageStatus", {
+          conversationId: String(msg.conversationId),
+          messageId,
+          status,
+        });
       }
     }
 
