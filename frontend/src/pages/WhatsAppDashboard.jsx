@@ -981,7 +981,7 @@ const WhatsAppDashboard = () => {
     formData.append("file", file);
     formData.append("mime", mime);
 
-    const res = await fetch(`${BACKEND}/messages/upload-media`, {
+    const res = await fetch(`${BACKEND}/messages/uploadMedia`, {
       method: "POST",
       body: formData,
     });
