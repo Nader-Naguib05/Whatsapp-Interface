@@ -7,7 +7,8 @@ router.get("/:id", async (req, res) => {
   const mediaId = req.params.id;
 
   try {
-    // Step 1 — Fetch metadata properly with fields=url MIME type
+    console.log("Fetching metadata for:", mediaId);
+
     const metadataRes = await axios.get(
       `https://graph.facebook.com/v20.0/${mediaId}`,
       {
@@ -15,33 +16,25 @@ router.get("/:id", async (req, res) => {
         headers: {
           Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
         },
+        validateStatus: () => true, // DON'T throw errors, return them
       }
     );
 
-    const fileUrl = metadataRes.data.url;
-    const mimeType = metadataRes.data.mime_type;
+    console.log("META RESPONSE:", metadataRes.data);
 
-    if (!fileUrl) {
-      console.error("Meta returned no file URL: ", metadataRes.data);
-      return res.status(404).json({
-        error: "File URL not found",
-        meta: metadataRes.data,
-      });
-    }
-
-    // Step 2 — Download actual media binary from fileUrl
-    const fileRes = await axios.get(fileUrl, {
-      responseType: "arraybuffer",
+    // Return EVERYTHING to frontend so I can see the real error
+    return res.json({
+      meta_response: metadataRes.data,
+      http_status: metadataRes.status,
+      note: "This is diagnostic mode. NOT returning media binary.",
     });
 
-    res.setHeader("Content-Type", mimeType || "application/octet-stream");
-    return res.send(Buffer.from(fileRes.data));
-
   } catch (err) {
-    console.error("Media fetch error:", err.response?.data || err.message);
-    return res.status(500).json({
-      error: "Failed to fetch media",
-      details: err.response?.data || err.message,
+    console.log("Diagnostic Error:", err.response?.data || err.message);
+
+    return res.json({
+      error: true,
+      diagnostic: err.response?.data || err.message,
     });
   }
 });
