@@ -10,6 +10,7 @@ import {
 } from "../services/whatsapp.service.js";
 import { getIO } from "../sockets/chatSocket.js";
 import { findOrCreateConversationByPhone } from "../utils/helpers.js";
+import axios from "axios";
 
 // ---------- helpers ----------
 
