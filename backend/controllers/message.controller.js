@@ -320,8 +320,8 @@ export async function markAsReadController(req, res) {
       .json({ error: "Failed to mark as read" });
   }
 }
-// ---------- upload media (file -> buffer -> meta -> send) ----------
 
+// ---------- upload media (file -> buffer -> meta -> send) ----------
 import multer from "multer";
 import FormData from "form-data";
 const upload = multer({ storage: multer.memoryStorage() });
@@ -353,10 +353,15 @@ export const uploadMediaAndSendController = [
       // ------------------------------
 
       const formData = new FormData();
+
+      // *** REQUIRED OR META THROWS (#100) messaging_product error ***
+      formData.append("messaging_product", "whatsapp");
+
       formData.append("file", file.buffer, {
         filename: file.originalname,
         contentType: mimeType,
       });
+
       formData.append("type", mimeType);
 
       const uploadRes = await axios.post(
@@ -371,7 +376,6 @@ export const uploadMediaAndSendController = [
       );
 
       const mediaId = uploadRes.data.id;
-
 
       // ------------------------------
       // 2. Determine message type
@@ -397,7 +401,6 @@ export const uploadMediaAndSendController = [
         };
       }
 
-
       // ------------------------------
       // 3. Send the WhatsApp Message
       // ------------------------------
@@ -418,9 +421,7 @@ export const uploadMediaAndSendController = [
         }
       );
 
-      const waId =
-        sendMsgRes?.data?.messages?.[0]?.id || null;
-
+      const waId = sendMsgRes?.data?.messages?.[0]?.id || null;
 
       // ------------------------------
       // 4. Save Message to DB
@@ -433,7 +434,7 @@ export const uploadMediaAndSendController = [
         senderType: "agent",
         body: file.originalname,
         mediaType: mimeType,
-        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`, // requires auth to fetch
+        mediaUrl: `https://graph.facebook.com/v20.0/${mediaId}`,
         status: "sent",
         msgId: waId,
         meta: sendMsgRes.data,
@@ -443,22 +444,19 @@ export const uploadMediaAndSendController = [
       conv.updatedAt = new Date();
       await conv.save();
 
-
       // ------------------------------
       // 5. Emit real-time ACK to UI
       // ------------------------------
 
       emitAck(conv._id, saved, clientId);
 
-
-      // ------------------------------
-      // 6. Respond
-      // ------------------------------
-
       return res.json({ ok: true, message: saved });
 
     } catch (err) {
-      console.error("uploadMediaAndSend error:", err.response?.data || err);
+      console.error(
+        "uploadMediaAndSend error:",
+        err.response?.data || err
+      );
       return res.status(500).json({ error: "Failed to send media" });
     }
   },
