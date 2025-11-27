@@ -1,5 +1,10 @@
 // src/components/chats/ChatLayout.jsx
-import React, { useEffect, useRef } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useMemo,
+} from "react";
 import {
   Search,
   MoreVertical,
@@ -9,6 +14,8 @@ import {
   Send,
   Check,
   CheckCheck,
+  AlertCircle,
+  FileText,
 } from "lucide-react";
 
 import "../../styles/wa-chat.css";
@@ -52,7 +59,18 @@ function formatDayLabel(ts) {
   return d.toLocaleDateString();
 }
 
-function MessageBubble({ msg }) {
+// small helper for stable message key
+function getMessageKey(msg, idx) {
+  return (
+    msg.clientId ||
+    msg.id ||
+    msg._id ||
+    msg.msgId ||
+    idx
+  );
+}
+
+function MessageBubble({ msg, onRetryMessage }) {
   const senderType =
     msg.senderType || msg.sender || msg.role;
   const timestamp =
@@ -66,8 +84,31 @@ function MessageBubble({ msg }) {
 
   const status = msg.status;
   const text = msg.text ?? msg.body ?? "";
+  const mediaUrl = msg.mediaUrl;
+  const mediaType = msg.mediaType;
 
-  if (!text) return null;
+  if (!text && !mediaUrl) return null;
+
+  const bubbleTitle = [
+    isOutgoing ? "Sent" : "Received",
+    timestamp ? `• ${formatTime(timestamp)}` : "",
+    status ? `• Status: ${status}` : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const handleRetry = () => {
+    if (status === "failed" && onRetryMessage) {
+      onRetryMessage(msg);
+    }
+  };
+
+  const showAsImage =
+    mediaUrl &&
+    (!mediaType ||
+      mediaType === "image" ||
+      (typeof mediaType === "string" &&
+        mediaType.startsWith("image/")));
 
   return (
     <div
@@ -76,6 +117,9 @@ function MessageBubble({ msg }) {
         (isOutgoing
           ? "wa-message-row--outgoing"
           : "wa-message-row--incoming")
+      }
+      data-message-id={
+        msg.clientId || msg.id || msg._id || msg.msgId
       }
     >
       <div
@@ -88,10 +132,41 @@ function MessageBubble({ msg }) {
             ? " wa-message-bubble--sending"
             : "")
         }
+        title={bubbleTitle}
       >
-        <div className="wa-message-text">
-          {text}
-        </div>
+        {/* MEDIA PREVIEW (enterprise feature) */}
+        {mediaUrl && (
+          <div className="wa-message-media">
+            {showAsImage ? (
+              <img
+                src={mediaUrl}
+                alt="attachment"
+                className="wa-message-media-image"
+              />
+            ) : (
+              <a
+                href={mediaUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="wa-message-media-file"
+              >
+                <FileText size={14} />
+                <span>
+                  {msg.fileName ||
+                    msg.filename ||
+                    "Attachment"}
+                </span>
+              </a>
+            )}
+          </div>
+        )}
+
+        {text && (
+          <div className="wa-message-text">
+            {text}
+          </div>
+        )}
+
         <div className="wa-message-meta">
           <span className="wa-message-time">
             {formatTime(timestamp)}
@@ -114,9 +189,18 @@ function MessageBubble({ msg }) {
                 />
               )}
               {status === "failed" && (
-                <span className="wa-message-failed">
-                  !
-                </span>
+                <button
+                  type="button"
+                  className="wa-message-failed-btn"
+                  onClick={handleRetry}
+                  title={
+                    onRetryMessage
+                      ? "Failed • Click to retry"
+                      : "Failed"
+                  }
+                >
+                  <AlertCircle size={14} />
+                </button>
               )}
             </span>
           )}
@@ -141,16 +225,67 @@ const ChatLayout = ({
   hasMoreMessages = false,
   isLoadingMore = false,
   onLoadOlderMessages,
+
+  // NEW OPTIONAL ENTERPRISE FEATURES (non-breaking)
+  onSearchChange,
+  searchPlaceholder = "Search conversations",
+  isCustomerTyping = false,
+  customerTypingText = "Customer is typing…",
+  contactStatus, // "online" | "offline" | undefined
+  onRetryMessage, // for failed messages
 }) => {
   const listRef = useRef(null);
   const bottomRef = useRef(null);
   const messagesRef = useRef(null);
 
-  // auto-scroll to bottom when messages change (only for new ones)
+  const [localSearch, setLocalSearch] = useState("");
+
+  // track last message to avoid breaking scroll when loading history
+  const lastMessageKeyRef = useRef(null);
+  const initialScrollDoneRef = useRef(false);
+
+  // Smart auto-scroll:
+  // - Scroll on first load
+  // - Scroll when a NEW message arrives at the bottom
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({
-      behavior: "smooth",
-    });
+    if (!messages || messages.length === 0) return;
+
+    const lastMsg = messages[messages.length - 1] || {};
+    const lastKey = getMessageKey(
+      lastMsg,
+      messages.length - 1
+    );
+
+    const messagesContainer = messagesRef.current;
+
+    // first load -> scroll
+    if (!initialScrollDoneRef.current) {
+      bottomRef.current?.scrollIntoView({
+        behavior: "auto",
+      });
+      initialScrollDoneRef.current = true;
+      lastMessageKeyRef.current = lastKey;
+      return;
+    }
+
+    const prevLastKey = lastMessageKeyRef.current;
+
+    // if last message changed, assume new message at bottom -> scroll
+    if (lastKey && lastKey !== prevLastKey) {
+      const nearBottom =
+        messagesContainer &&
+        messagesContainer.scrollHeight -
+          messagesContainer.scrollTop -
+          messagesContainer.clientHeight <
+          120;
+
+      if (nearBottom || !prevLastKey) {
+        bottomRef.current?.scrollIntoView({
+          behavior: "smooth",
+        });
+      }
+      lastMessageKeyRef.current = lastKey;
+    }
   }, [messages]);
 
   const activeConversation =
@@ -187,37 +322,51 @@ const ChatLayout = ({
     }
   };
 
-  // group messages by day
-  const groupedByDay = [];
-  let currentDay = null;
-
-  (messages || []).forEach((msg, idx) => {
-    const timestamp =
-      msg.timestamp || msg.time || msg.createdAt;
-    const dayLabel = formatDayLabel(timestamp);
-
-    const baseId =
-      msg.clientId ||
-      msg.id ||
-      msg._id ||
-      msg.msgId ||
-      idx;
-
-    if (dayLabel && dayLabel !== currentDay) {
-      currentDay = dayLabel;
-      groupedByDay.push({
-        type: "day",
-        label: dayLabel,
-        id: `day-${dayLabel}-${baseId}`,
-      });
+  const handleSearchChange = (e) => {
+    const value = e.target.value;
+    setLocalSearch(value);
+    if (onSearchChange) {
+      onSearchChange(value);
     }
+  };
 
-    groupedByDay.push({
-      type: "msg",
-      data: { ...msg, timestamp },
-      id: `msg-${baseId}`,
+  // group messages by day, memoized for performance
+  const groupedByDay = useMemo(() => {
+    const result = [];
+    let currentDay = null;
+
+    (messages || []).forEach((msg, idx) => {
+      const timestamp =
+        msg.timestamp || msg.time || msg.createdAt;
+      const dayLabel = formatDayLabel(timestamp);
+
+      const baseId = getMessageKey(msg, idx);
+
+      if (dayLabel && dayLabel !== currentDay) {
+        currentDay = dayLabel;
+        result.push({
+          type: "day",
+          label: dayLabel,
+          id: `day-${dayLabel}-${baseId}`,
+        });
+      }
+
+      result.push({
+        type: "msg",
+        data: { ...msg, timestamp },
+        id: `msg-${baseId}`,
+      });
     });
-  });
+
+    return result;
+  }, [messages]);
+
+  const statusBadge =
+    contactStatus === "online"
+      ? "Online"
+      : contactStatus === "offline"
+      ? "Offline"
+      : null;
 
   return (
     <div className="wa-shell">
@@ -234,9 +383,10 @@ const ChatLayout = ({
           />
           <input
             type="text"
-            placeholder="Search conversations"
+            placeholder={searchPlaceholder}
             className="wa-search-input"
-            onChange={() => {}}
+            value={localSearch}
+            onChange={handleSearchChange}
           />
         </div>
 
@@ -265,6 +415,7 @@ const ChatLayout = ({
             return (
               <button
                 key={convId}
+                type="button"
                 className={
                   "wa-conversation-item" +
                   (String(convId) ===
@@ -332,17 +483,24 @@ const ChatLayout = ({
                   <div className="wa-chat-subtitle">
                     {contactPhone ||
                       activeConversation.phone}
+                    {statusBadge && (
+                      <span className="wa-presence-badge">
+                        • {statusBadge}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>
               <div className="wa-chat-header-actions">
                 <button
+                  type="button"
                   className="wa-icon-button"
                   title="Call"
                 >
                   <Phone size={18} />
                 </button>
                 <button
+                  type="button"
                   className="wa-icon-button"
                   title="More"
                 >
@@ -362,6 +520,15 @@ const ChatLayout = ({
                 </div>
               )}
 
+              {groupedByDay.length === 0 && (
+                <div className="wa-empty-thread">
+                  <p>
+                    No messages yet. Start the
+                    conversation.
+                  </p>
+                </div>
+              )}
+
               {groupedByDay.map((item) =>
                 item.type === "day" ? (
                   <div
@@ -374,14 +541,28 @@ const ChatLayout = ({
                   <MessageBubble
                     key={item.id}
                     msg={item.data}
+                    onRetryMessage={onRetryMessage}
                   />
                 )
               )}
+
+              {isCustomerTyping && (
+                <div className="wa-typing-indicator">
+                  <span className="wa-typing-dots">
+                    • • •
+                  </span>
+                  <span className="wa-typing-text">
+                    {customerTypingText}
+                  </span>
+                </div>
+              )}
+
               <div ref={bottomRef} />
             </div>
 
             <footer className="wa-chat-composer">
               <button
+                type="button"
                 className="wa-icon-button"
                 onClick={onAttachClick}
                 title="Attach file"
@@ -390,6 +571,7 @@ const ChatLayout = ({
               </button>
 
               <button
+                type="button"
                 className="wa-icon-button"
                 onClick={onEmojiClick}
                 title="Emoji"
@@ -409,6 +591,7 @@ const ChatLayout = ({
               />
 
               <button
+                type="button"
                 className={
                   "wa-send-button" +
                   (composerValue &&
