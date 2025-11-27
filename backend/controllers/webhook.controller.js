@@ -1,4 +1,4 @@
-// controllers/webhookController.mjs
+// controllers/webhook.controller.js
 import pkg from "express";
 const { Request, Response } = pkg;
 
@@ -29,18 +29,32 @@ export async function receiveWebhook(req, res) {
     const io = getIO();
 
     for (const ev of events) {
-      // 🟢 Incoming message
+      // 🟢 Incoming message (text or media)
       if (ev.event === "message") {
-        if (!ev.text) continue;
+        const hasText = !!ev.text;
+        const hasMedia = !!ev.mediaUrl;
+
+        // Skip weird stuff with no body or media at all
+        if (!hasText && !hasMedia) continue;
 
         const conv = await findOrCreateConversationByPhone(ev.from);
+
+        const body =
+          ev.text ||
+          ev.caption ||
+          (ev.mediaType
+            ? `[${ev.mediaType}]`
+            : "[message]");
 
         const messageDoc = await Message.create({
           conversationId: conv._id,
           from: ev.from,
           to: ev.to,
           senderType: "customer",
-          body: ev.text,
+          body,
+          mediaUrl: ev.mediaUrl || null,
+          mediaType: ev.mediaType || null, // e.g. "image" | "video" | "document"
+          mimeType: ev.mimeType || null,
           status: "received",
           createdAt: new Date(Number(ev.timestamp) * 1000),
           raw: ev.raw,
@@ -48,7 +62,7 @@ export async function receiveWebhook(req, res) {
         });
 
         // Update conversation meta
-        conv.lastMessage = ev.text;
+        conv.lastMessage = body;
         conv.lastMessageAt = messageDoc.createdAt;
         conv.unreadCount = (conv.unreadCount || 0) + 1;
         await conv.save();
@@ -57,7 +71,7 @@ export async function receiveWebhook(req, res) {
           _id: conv._id,
           phone: conv.phone,
           name: conv.name || conv.phone,
-          lastMessage: ev.text,
+          lastMessage: body,
           lastMessageAt: messageDoc.createdAt,
           unreadCount: conv.unreadCount,
         };
@@ -67,6 +81,8 @@ export async function receiveWebhook(req, res) {
           conversationId: String(conv._id),
           body: messageDoc.body,
           mediaUrl: messageDoc.mediaUrl || null,
+          mediaType: messageDoc.mediaType || null,
+          mimeType: messageDoc.mimeType || null,
           senderType: "customer",
           createdAt: messageDoc.createdAt,
           status: messageDoc.status,

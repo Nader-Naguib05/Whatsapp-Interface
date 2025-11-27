@@ -24,14 +24,16 @@ const MessageSchema = new mongoose.Schema(
       default: "",
     },
 
-    // 🔥 THE OFFICIAL WHATSAPP MESSAGE ID
+    // 🔥 OFFICIAL WHATSAPP MESSAGE ID
     msgId: {
       type: String,
       index: true, // fast lookup for delivery/read updates
     },
 
     // MEDIA SUPPORT
-    mediaUrl: String,
+    mediaUrl: String,     // our proxy URL, e.g. /media/:id
+    mediaType: String,    // "image" | "video" | "audio" | "document"
+    mimeType: String,     // "image/jpeg", "application/pdf", etc.
 
     // META STATUS: "sent", "delivered", "read", "failed", "received"
     status: {

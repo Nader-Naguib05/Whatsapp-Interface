@@ -1,4 +1,5 @@
 // src/components/chats/ChatLayout.jsx
+
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
     Search,
@@ -15,10 +16,12 @@ import {
 
 import "../../styles/wa-chat.css";
 
+/* ---------------------------------------------------
+   UTILS
+--------------------------------------------------- */
 function formatTime(ts) {
     if (!ts) return "";
     const date = new Date(ts);
-    if (Number.isNaN(date.getTime())) return "";
     return date.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
@@ -28,8 +31,6 @@ function formatTime(ts) {
 function formatDayLabel(ts) {
     if (!ts) return "";
     const d = new Date(ts);
-    if (Number.isNaN(d.getTime())) return "";
-
     const today = new Date();
 
     const todayMidnight = new Date(
@@ -37,7 +38,11 @@ function formatDayLabel(ts) {
         today.getMonth(),
         today.getDate()
     );
-    const msgMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+    const msgMidnight = new Date(
+        d.getFullYear(),
+        d.getMonth(),
+        d.getDate()
+    );
 
     const diffDays =
         (todayMidnight.getTime() - msgMidnight.getTime()) /
@@ -49,30 +54,41 @@ function formatDayLabel(ts) {
     return d.toLocaleDateString();
 }
 
-// small helper for stable message key
 function getMessageKey(msg, idx) {
-    return msg.clientId || msg.id || msg._id || msg.msgId || idx;
+    return msg.clientId || msg._id || msg.id || idx;
 }
 
+/* ---------------------------------------------------
+   MESSAGE BUBBLE — Now perfectly aligned with CSS
+--------------------------------------------------- */
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
-    const timestamp = msg.timestamp || msg.time || msg.createdAt;
-    const mediaUrl = msg.mediaUrl;
+    const timestamp =
+        msg.timestamp || msg.time || msg.createdAt || msg.sentAt;
+
     const mediaType = msg.mediaType || "";
+    const mediaUrl = msg.mediaUrl || null;
     const fileName = msg.fileName || msg.filename || "Attachment";
+
+    const text = msg.text || msg.body || "";
+    const status = msg.status || "sent";
 
     const isOutgoing =
         senderType === "agent" ||
         msg.from === "business" ||
         msg.fromMe === true;
 
-    const text = msg.text ?? msg.body ?? "";
-    const status = msg.status || "sent";
+    const isSending =
+        status === "sending" || status.startsWith("uploading-");
+    const isFailed = status === "failed";
+
+    const isImage = mediaType === "image" || mediaType.startsWith("image/");
+    const isVideo = mediaType === "video" || mediaType.startsWith("video/");
+    const isAudio = mediaType === "audio" || mediaType.startsWith("audio/");
+    const isDocument = mediaUrl && !isImage && !isVideo && !isAudio;
 
     const handleRetry = () => {
-        if (status === "failed" && onRetryMessage) {
-            onRetryMessage(msg);
-        }
+        if (isFailed && onRetryMessage) onRetryMessage(msg);
     };
 
     return (
@@ -89,36 +105,38 @@ function MessageBubble({ msg, onRetryMessage }) {
                     "wa-message-bubble " +
                     (isOutgoing
                         ? "wa-message-bubble--outgoing"
-                        : "wa-message-bubble--incoming") +
-                    (status === "sending" ? " wa-message-bubble--sending" : "")
+                        : "wa-message-bubble--incoming")
                 }
             >
-                {/* ---------- MEDIA PREVIEW ---------- */}
+                {/* MEDIA */}
                 {mediaUrl && (
                     <div className="wa-message-media">
+                        {isSending && (
+                            <div className="wa-media-loading-overlay">
+                                <div className="wa-loader"></div>
+                            </div>
+                        )}
 
-                        {/* IMAGE */}
-                        {mediaType.startsWith("image/") && (
+                        {isImage && (
                             <img
                                 src={mediaUrl}
                                 alt="image"
                                 className="wa-media-img"
                                 draggable={false}
+                                loading="lazy"
                             />
                         )}
 
-                        {/* VIDEO */}
-                        {mediaType.startsWith("video/") && (
+                        {isVideo && (
                             <video
                                 src={mediaUrl}
                                 controls
                                 className="wa-media-video"
                                 draggable={false}
-                            />
+                            ></video>
                         )}
 
-                        {/* AUDIO */}
-                        {mediaType.startsWith("audio/") && (
+                        {isAudio && (
                             <audio
                                 controls
                                 src={mediaUrl}
@@ -126,27 +144,31 @@ function MessageBubble({ msg, onRetryMessage }) {
                             />
                         )}
 
-                        {/* DOCUMENT / FILE */}
-                        {!mediaType.startsWith("image/") &&
-                            !mediaType.startsWith("video/") &&
-                            !mediaType.startsWith("audio/") && (
-                                <a
-                                    href={mediaUrl}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    className="wa-media-file"
-                                >
-                                    <FileText size={18} />
-                                    <span>{fileName}</span>
-                                </a>
-                            )}
+                        {isDocument && (
+                            <a
+                                href={mediaUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="wa-media-file-card"
+                            >
+                                <FileText size={22} />
+                                <div className="wa-media-file-info">
+                                    <span className="wa-media-file-name">
+                                        {fileName}
+                                    </span>
+                                    <span className="wa-media-file-size">
+                                        Tap to download
+                                    </span>
+                                </div>
+                            </a>
+                        )}
                     </div>
                 )}
 
-                {/* ---------- TEXT ---------- */}
+                {/* TEXT CONTENT */}
                 {text && <div className="wa-message-text">{text}</div>}
 
-                {/* ---------- META (Time + Status) ---------- */}
+                {/* META (Time + Status) */}
                 <div className="wa-message-meta">
                     <span className="wa-message-time">
                         {formatTime(timestamp)}
@@ -154,23 +176,31 @@ function MessageBubble({ msg, onRetryMessage }) {
 
                     {isOutgoing && (
                         <span className="wa-message-status">
+                            {status.startsWith("uploading-") && (
+                                <span className="wa-uploading-text">
+                                    {status.replace("uploading-", "")}%
+                                </span>
+                            )}
+
                             {status === "sending" && (
                                 <span className="wa-sending-dot"></span>
                             )}
+
                             {status === "sent" && <Check size={14} />}
-                            {status === "delivered" && <CheckCheck size={14} />}
+                            {status === "delivered" && (
+                                <CheckCheck size={14} />
+                            )}
                             {status === "read" && (
                                 <CheckCheck
                                     size={14}
                                     className="wa-message-status--read"
                                 />
                             )}
-                            {status === "failed" && (
+
+                            {isFailed && (
                                 <button
-                                    type="button"
                                     className="wa-message-failed-btn"
                                     onClick={handleRetry}
-                                    title="Failed • Click to retry"
                                 >
                                     <AlertCircle size={14} />
                                 </button>
@@ -183,93 +213,125 @@ function MessageBubble({ msg, onRetryMessage }) {
     );
 }
 
-
+/* ---------------------------------------------------
+   MAIN LAYOUT
+--------------------------------------------------- */
 const ChatLayout = ({
     conversations = [],
     activeConversationId,
+
     onSelectConversation,
     messages = [],
-    onSendMessage,
+
     composerValue,
     setComposerValue,
+    onSendMessage,
+
     onAttachClick,
-    contactName,
-    contactPhone,
     onEmojiClick,
+
+    onRetryMessage,
+
     hasMoreMessages = false,
     isLoadingMore = false,
     onLoadOlderMessages,
 
-    // NEW OPTIONAL ENTERPRISE FEATURES (non-breaking)
     onSearchChange,
-    searchPlaceholder = "Search conversations",
+
     isCustomerTyping = false,
-    customerTypingText = "Customer is typing…",
-    contactStatus, // "online" | "offline" | undefined
-    onRetryMessage, // for failed messages
-    onAddToContacts, // new: header 3-dots action
+    customerTypingText = "Typing...",
+
+    contactName,
+    contactPhone,
+    contactStatus, // "online" | "offline"
+
+    onAddToContacts,
 }) => {
-    const listRef = useRef(null);
-    const bottomRef = useRef(null);
     const messagesRef = useRef(null);
+    const bottomRef = useRef(null);
+    const lastMessageKeyRef = useRef(null);
+    const initialScrollDoneRef = useRef(false);
 
     const [localSearch, setLocalSearch] = useState("");
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
 
-    // track last message to avoid breaking scroll when loading history
-    const lastMessageKeyRef = useRef(null);
-    const initialScrollDoneRef = useRef(false);
-
-    // Smart auto-scroll:
-    // - Scroll on first load
-    // - Scroll when a NEW message arrives at the bottom
+    /* ---------------------------------------------------
+       SCROLL BEHAVIOR
+    --------------------------------------------------- */
     useEffect(() => {
         if (!messages || messages.length === 0) return;
 
         const lastMsg = messages[messages.length - 1] || {};
         const lastKey = getMessageKey(lastMsg, messages.length - 1);
+        const container = messagesRef.current;
 
-        const messagesContainer = messagesRef.current;
-
-        // first load -> scroll
         if (!initialScrollDoneRef.current) {
-            bottomRef.current?.scrollIntoView({
-                behavior: "auto",
-            });
+            bottomRef.current?.scrollIntoView({ behavior: "auto" });
             initialScrollDoneRef.current = true;
             lastMessageKeyRef.current = lastKey;
             return;
         }
 
-        const prevLastKey = lastMessageKeyRef.current;
-
-        // if last message changed, assume new message at bottom -> scroll
-        if (lastKey && lastKey !== prevLastKey) {
+        const prevKey = lastMessageKeyRef.current;
+        if (lastKey && lastKey !== prevKey) {
             const nearBottom =
-                messagesContainer &&
-                messagesContainer.scrollHeight -
-                    messagesContainer.scrollTop -
-                    messagesContainer.clientHeight <
-                    120;
+                container.scrollHeight -
+                    container.scrollTop -
+                    container.clientHeight <
+                160;
 
-            if (nearBottom || !prevLastKey) {
-                bottomRef.current?.scrollIntoView({
-                    behavior: "smooth",
-                });
+            if (nearBottom) {
+                bottomRef.current?.scrollIntoView({ behavior: "smooth" });
             }
             lastMessageKeyRef.current = lastKey;
         }
     }, [messages]);
 
-    const activeConversation =
-        conversations.find(
-            (c) =>
-                String(c._id || c.id) ===
-                (activeConversationId != null
-                    ? String(activeConversationId)
-                    : activeConversationId)
-        ) || null;
+    /* ---------------------------------------------------
+       GROUP BY DAY
+    --------------------------------------------------- */
+    const groupedByDay = useMemo(() => {
+        const result = [];
+        let currentDay = null;
 
+        messages.forEach((msg, idx) => {
+            const ts =
+                msg.timestamp || msg.time || msg.createdAt;
+            const dayLabel = formatDayLabel(ts);
+
+            const baseId = getMessageKey(msg, idx);
+
+            if (dayLabel !== currentDay) {
+                currentDay = dayLabel;
+                result.push({
+                    type: "day",
+                    id: `day-${dayLabel}-${baseId}`,
+                    label: dayLabel,
+                });
+            }
+
+            result.push({
+                type: "msg",
+                id: `msg-${baseId}`,
+                data: { ...msg, timestamp: ts },
+            });
+        });
+
+        return result;
+    }, [messages]);
+
+    /* ---------------------------------------------------
+       SEARCH
+    --------------------------------------------------- */
+    const handleSearchChange = (e) => {
+        const v = e.target.value;
+        setLocalSearch(v);
+        onSearchChange?.(v);
+    };
+
+    /* ---------------------------------------------------
+       SEND MSG
+    --------------------------------------------------- */
     const handleSend = () => {
         const trimmed = (composerValue || "").trim();
         if (!trimmed) return;
@@ -283,55 +345,29 @@ const ChatLayout = ({
         }
     };
 
+    /* ---------------------------------------------------
+       LOAD PREVIOUS MESSAGES
+    --------------------------------------------------- */
     const handleScroll = () => {
         const el = messagesRef.current;
-        if (!el || !onLoadOlderMessages) return;
+        if (!el) return;
 
-        // near the top
         if (el.scrollTop <= 40) {
             if (!isLoadingMore && hasMoreMessages) {
-                onLoadOlderMessages();
+                onLoadOlderMessages?.();
             }
         }
     };
 
-    const handleSearchChange = (e) => {
-        const value = e.target.value;
-        setLocalSearch(value);
-        if (onSearchChange) {
-            onSearchChange(value);
-        }
-    };
-
-    // group messages by day, memoized for performance
-    const groupedByDay = useMemo(() => {
-        const result = [];
-        let currentDay = null;
-
-        (messages || []).forEach((msg, idx) => {
-            const timestamp = msg.timestamp || msg.time || msg.createdAt;
-            const dayLabel = formatDayLabel(timestamp);
-
-            const baseId = getMessageKey(msg, idx);
-
-            if (dayLabel && dayLabel !== currentDay) {
-                currentDay = dayLabel;
-                result.push({
-                    type: "day",
-                    label: dayLabel,
-                    id: `day-${dayLabel}-${baseId}`,
-                });
-            }
-
-            result.push({
-                type: "msg",
-                data: { ...msg, timestamp },
-                id: `msg-${baseId}`,
-            });
-        });
-
-        return result;
-    }, [messages]);
+    /* ---------------------------------------------------
+       CURRENT CONVERSATION
+    --------------------------------------------------- */
+    const activeConversation =
+        conversations.find(
+            (c) =>
+                String(c._id || c.id) ===
+                String(activeConversationId)
+        ) || null;
 
     const statusBadge =
         contactStatus === "online"
@@ -340,68 +376,46 @@ const ChatLayout = ({
             ? "Offline"
             : null;
 
-    const handleHeaderMenuAddToContacts = () => {
-        setIsHeaderMenuOpen(false);
-        if (!onAddToContacts || !activeConversation) return;
-
-        onAddToContacts({
-            id: activeConversation._id || activeConversation.id,
-            name:
-                contactName ||
-                activeConversation.name ||
-                activeConversation.displayName ||
-                activeConversation.phone,
-            phone: contactPhone || activeConversation.phone,
-        });
-    };
-
     return (
         <div className="wa-shell">
-            {/* LEFT */}
+            {/* SIDEBAR */}
             <aside className="wa-sidebar">
                 <div className="wa-sidebar-header">
                     <h1 className="wa-app-title">Inbox</h1>
                 </div>
 
+                {/* SEARCH */}
                 <div className="wa-search-wrapper">
                     <Search className="wa-search-icon" size={16} />
                     <input
                         type="text"
-                        placeholder={searchPlaceholder}
                         className="wa-search-input"
+                        placeholder="Search"
                         value={localSearch}
                         onChange={handleSearchChange}
                     />
                 </div>
 
-                <div className="wa-conversation-list" ref={listRef}>
+                {/* CONVERSATIONS */}
+                <div className="wa-conversation-list">
                     {conversations.map((conv) => {
                         const convId = conv._id || conv.id;
-                        const displayName =
+                        const name =
                             conv.name ||
                             conv.displayName ||
                             conv.phone ||
                             "Unknown";
-                        const lastMessagePreview = conv.lastMessage || "";
-                        const lastMessageAt =
+                        const lastMsg = conv.lastMessage || "";
+                        const lastAt =
                             conv.lastMessageAt ||
                             conv.updatedAt ||
                             conv.createdAt;
-                        const unread =
-                            conv.unreadCount !== undefined
-                                ? conv.unreadCount
-                                : conv.unread || 0;
-                        const presence =
-                            conv.contactStatus === "online"
-                                ? "• Online"
-                                : conv.contactStatus === "offline"
-                                ? "• Offline"
-                                : "";
+
+                        const unread = conv.unreadCount || 0;
 
                         return (
                             <button
                                 key={convId}
-                                type="button"
                                 className={
                                     "wa-conversation-item" +
                                     (String(convId) ===
@@ -409,40 +423,35 @@ const ChatLayout = ({
                                         ? " wa-conversation-item--active"
                                         : "")
                                 }
-                                onClick={() => onSelectConversation(convId)}
+                                onClick={() =>
+                                    onSelectConversation(convId)
+                                }
                             >
                                 <div className="wa-avatar">
-                                    {conv.initials ||
-                                        displayName?.[0] ||
-                                        conv.phone?.[0] ||
-                                        "?"}
+                                    {name[0]}
                                 </div>
+
                                 <div className="wa-conversation-main">
                                     <div className="wa-conversation-top-row">
                                         <span className="wa-conversation-name">
-                                            {displayName}
+                                            {name}
                                         </span>
                                         <span className="wa-conversation-time">
-                                            {formatTime(lastMessageAt)}
+                                            {formatTime(lastAt)}
                                         </span>
                                     </div>
+
                                     <div className="wa-conversation-bottom-row">
                                         <span className="wa-conversation-preview">
-                                            {lastMessagePreview ||
-                                                "No messages yet"}
+                                            {lastMsg}
                                         </span>
-                                        <div className="wa-conversation-meta-right">
-                                            {presence && (
-                                                <span className="wa-presence-pill">
-                                                    {presence}
-                                                </span>
-                                            )}
-                                            {unread > 0 && (
-                                                <span className="wa-unread-badge">
-                                                    {unread > 99 ? "99+" : unread}
-                                                </span>
-                                            )}
-                                        </div>
+                                        {unread > 0 && (
+                                            <span className="wa-unread-badge">
+                                                {unread > 99
+                                                    ? "99+"
+                                                    : unread}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
                             </button>
@@ -451,29 +460,24 @@ const ChatLayout = ({
                 </div>
             </aside>
 
-            {/* RIGHT */}
+            {/* CHAT AREA */}
             <section className="wa-chat-area">
                 {activeConversation ? (
                     <>
+                        {/* HEADER */}
                         <header className="wa-chat-header">
                             <div className="wa-chat-header-left">
                                 <div className="wa-avatar wa-avatar--lg">
                                     {contactName?.[0] ||
-                                        activeConversation.name?.[0] ||
-                                        activeConversation.displayName?.[0] ||
-                                        activeConversation.phone?.[0] ||
-                                        "?"}
+                                        activeConversation.name?.[0]}
                                 </div>
                                 <div>
                                     <div className="wa-chat-title">
                                         {contactName ||
-                                            activeConversation.name ||
-                                            activeConversation.displayName ||
-                                            activeConversation.phone}
+                                            activeConversation.name}
                                     </div>
                                     <div className="wa-chat-subtitle">
-                                        {contactPhone ||
-                                            activeConversation.phone}
+                                        {contactPhone}
                                         {statusBadge && (
                                             <span className="wa-presence-badge">
                                                 • {statusBadge}
@@ -482,35 +486,41 @@ const ChatLayout = ({
                                     </div>
                                 </div>
                             </div>
+
                             <div className="wa-chat-header-actions">
-                                <button
-                                    type="button"
-                                    className="wa-icon-button"
-                                    title="Call"
-                                >
+                                <button className="wa-icon-button">
                                     <Phone size={18} />
                                 </button>
+
                                 <div className="wa-header-menu-wrapper">
                                     <button
                                         type="button"
                                         className="wa-icon-button"
-                                        title="More"
                                         onClick={() =>
                                             setIsHeaderMenuOpen(
-                                                (open) => !open
+                                                (o) => !o
                                             )
                                         }
                                     >
                                         <MoreVertical size={18} />
                                     </button>
+
                                     {isHeaderMenuOpen && (
                                         <div className="wa-header-menu">
                                             <button
-                                                type="button"
                                                 className="wa-header-menu-item"
-                                                onClick={
-                                                    handleHeaderMenuAddToContacts
-                                                }
+                                                onClick={() => {
+                                                    setIsHeaderMenuOpen(false);
+                                                    onAddToContacts?.({
+                                                        id: activeConversationId,
+                                                        name:
+                                                            contactName ||
+                                                            activeConversation.name,
+                                                        phone:
+                                                            contactPhone ||
+                                                            activeConversation.phone,
+                                                    });
+                                                }}
                                             >
                                                 Add to contacts
                                             </button>
@@ -520,6 +530,7 @@ const ChatLayout = ({
                             </div>
                         </header>
 
+                        {/* MESSAGES */}
                         <div
                             className="wa-chat-messages"
                             ref={messagesRef}
@@ -527,15 +538,7 @@ const ChatLayout = ({
                         >
                             {isLoadingMore && hasMoreMessages && (
                                 <div className="wa-loading-more">
-                                    Loading older messages...
-                                </div>
-                            )}
-
-                            {groupedByDay.length === 0 && (
-                                <div className="wa-empty-thread">
-                                    <p>
-                                        No messages yet. Start the conversation.
-                                    </p>
+                                    Loading...
                                 </div>
                             )}
 
@@ -563,21 +566,19 @@ const ChatLayout = ({
                                         <span></span>
                                         <span></span>
                                     </div>
-                                    <span className="wa-typing-text">
-                                        {customerTypingText}
-                                    </span>
+                                    <span>{customerTypingText}</span>
                                 </div>
                             )}
 
                             <div ref={bottomRef} />
                         </div>
 
+                        {/* COMPOSER */}
                         <footer className="wa-chat-composer">
                             <button
                                 type="button"
                                 className="wa-icon-button"
                                 onClick={onAttachClick}
-                                title="Attach file"
                             >
                                 <Paperclip size={18} />
                             </button>
@@ -586,7 +587,6 @@ const ChatLayout = ({
                                 type="button"
                                 className="wa-icon-button"
                                 onClick={onEmojiClick}
-                                title="Emoji"
                             >
                                 <Smile size={18} />
                             </button>
@@ -595,26 +595,22 @@ const ChatLayout = ({
                                 className="wa-composer-input"
                                 placeholder="Type a message"
                                 value={composerValue}
+                                rows={1}
                                 onChange={(e) =>
                                     setComposerValue(e.target.value)
                                 }
                                 onKeyDown={handleKeyDown}
-                                rows={1}
                             />
 
                             <button
-                                type="button"
                                 className={
                                     "wa-send-button" +
-                                    (composerValue && composerValue.trim()
+                                    (composerValue?.trim()
                                         ? " wa-send-button--active"
                                         : "")
                                 }
                                 onClick={handleSend}
-                                disabled={
-                                    !composerValue || !composerValue.trim()
-                                }
-                                title="Send"
+                                disabled={!composerValue?.trim()}
                             >
                                 <Send size={18} />
                             </button>
@@ -623,9 +619,7 @@ const ChatLayout = ({
                 ) : (
                     <div className="wa-empty-state">
                         <h2>Select a conversation</h2>
-                        <p>
-                            Choose a customer from the left to start messaging.
-                        </p>
+                        <p>Choose a customer to begin.</p>
                     </div>
                 )}
             </section>

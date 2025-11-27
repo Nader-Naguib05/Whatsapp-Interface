@@ -1,5 +1,5 @@
 // routes/messageRoutes.mjs
-import express from 'express';
+import express from "express";
 import {
   sendTextController,
   sendImageController,
@@ -7,14 +7,17 @@ import {
   sendTemplateController,
   markAsReadController,
   uploadMediaAndSendController,
-} from '../controllers/message.controller.js';
+} from "../controllers/message.controller.js";
 
 const router = express.Router();
 
-router.post('/sendText', sendTextController);
-router.post('/sendTemplate', sendTemplateController);
-router.post('/markAsRead', markAsReadController);
+router.post("/sendText", sendTextController);
+router.post("/sendImage", sendImageController);
+router.post("/sendDocument", sendDocumentController);
+router.post("/sendTemplate", sendTemplateController);
+router.post("/markAsRead", markAsReadController);
 
+// Multipart endpoint for file -> upload -> send
 router.post("/uploadMedia", uploadMediaAndSendController);
 
 export default router;
