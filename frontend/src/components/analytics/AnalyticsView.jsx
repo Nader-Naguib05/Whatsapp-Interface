@@ -72,7 +72,7 @@ const AnalyticsView = () => {
       setLoading(true);
       setError("");
 
-      const res = await fetch("/api/analytics/dashboard");
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/analytics/dashboard`);
       if (!res.ok) {
         throw new Error(`Request failed with status ${res.status}`);
       }
