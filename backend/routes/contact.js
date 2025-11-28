@@ -4,6 +4,7 @@ import {
   getContacts,
   getContactByPhone,
   createContact,
+  createFromChat,
   updateContact,
   deleteContact,
 } from "../controllers/contact.controller.js";
