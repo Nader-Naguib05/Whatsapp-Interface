@@ -1,5 +1,3 @@
-// src/components/chats/ChatLayout.jsx
-
 import React, { useEffect, useRef, useState, useMemo } from "react";
 import {
     Search,
@@ -244,6 +242,7 @@ const ChatLayout = ({
     contactName,
     contactPhone,
     contactStatus, // "online" | "offline"
+    isInContacts = false,
 
     onAddToContacts,
 }) => {
@@ -507,23 +506,25 @@ const ChatLayout = ({
 
                                     {isHeaderMenuOpen && (
                                         <div className="wa-header-menu">
-                                            <button
-                                                className="wa-header-menu-item"
-                                                onClick={() => {
-                                                    setIsHeaderMenuOpen(false);
-                                                    onAddToContacts?.({
-                                                        id: activeConversationId,
-                                                        name:
-                                                            contactName ||
-                                                            activeConversation.name,
-                                                        phone:
-                                                            contactPhone ||
-                                                            activeConversation.phone,
-                                                    });
-                                                }}
-                                            >
-                                                Add to contacts
-                                            </button>
+                                            {!isInContacts && (
+                                                <button
+                                                    className="wa-header-menu-item"
+                                                    onClick={() => {
+                                                        setIsHeaderMenuOpen(false);
+                                                        onAddToContacts?.({
+                                                            id: activeConversationId,
+                                                            name:
+                                                                contactName ||
+                                                                activeConversation.name,
+                                                            phone:
+                                                                contactPhone ||
+                                                                activeConversation.phone,
+                                                        });
+                                                    }}
+                                                >
+                                                    Add to contacts
+                                                </button>
+                                            )}
                                         </div>
                                     )}
                                 </div>
