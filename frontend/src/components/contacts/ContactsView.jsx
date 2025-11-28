@@ -15,6 +15,7 @@ import {
   Info,
   MessageCircle,
   AlertTriangle,
+  MoreHorizontal,
 } from "lucide-react";
 import {
   getContacts,
@@ -60,7 +61,7 @@ const Avatar = ({ name }) => {
   const initials = name ? getInitials(name) : "?";
 
   return (
-    <div className="flex items-center justify-center bg-green-700/15 text-green-700 rounded-full w-11 h-11 font-semibold text-sm">
+    <div className="flex items-center justify-center rounded-full w-11 h-11 bg-gradient-to-br from-gray-100 to-gray-200 text-gray-800 font-semibold text-sm shadow-[0_0_0_1px_rgba(15,23,42,0.06)]">
       {initials}
     </div>
   );
@@ -108,62 +109,65 @@ const ContactModal = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
-      <div className="bg-white rounded-xl shadow-xl w-[420px] max-w-[95vw]">
-        <div className="flex items-center justify-between px-6 py-4 border-b">
-          <h3 className="text-lg font-semibold text-gray-900">
-            {mode === "edit" ? "Edit Contact" : "New Contact"}
+      <div className="bg-white/95 backdrop-blur-sm rounded-2xl shadow-2xl w-[420px] max-w-[95vw] border border-slate-100">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <h3 className="text-sm font-semibold text-slate-900">
+            {mode === "edit" ? "Edit contact" : "New contact"}
           </h3>
           <button
             type="button"
             onClick={onClose}
-            className="p-1 rounded-full hover:bg-gray-100"
+            className="p-1 rounded-full hover:bg-slate-100 transition-colors"
           >
-            <X className="w-4 h-4" />
+            <X className="w-4 h-4 text-slate-500" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+        <form onSubmit={handleSubmit} className="px-5 py-4 space-y-4 text-sm">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-600">
               Full name
             </label>
             <input
-              className={`w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none ${
-                nameError ? "border-red-400" : ""
+              className={`w-full px-3 py-2 rounded-lg bg-slate-50 border text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition ${
+                nameError ? "border-red-300" : "border-slate-200"
               }`}
               placeholder="Contact name"
               value={form.name}
               onChange={(e) => handleChange("name", e.target.value)}
             />
             {nameError && (
-              <p className="text-xs text-red-500 mt-1">{nameError}</p>
+              <p className="text-[11px] text-red-500 mt-0.5">{nameError}</p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-600">
               Phone number
             </label>
             <input
-              className={`w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none ${
-                phoneError ? "border-red-400" : ""
+              className={`w-full px-3 py-2 rounded-lg bg-slate-50 border text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition ${
+                phoneError ? "border-red-300" : "border-slate-200"
               }`}
               placeholder="+2010..."
               value={form.phone}
               onChange={(e) => handleChange("phone", e.target.value)}
             />
             {phoneError && (
-              <p className="text-xs text-red-500 mt-1">{phoneError}</p>
+              <p className="text-[11px] text-red-500 mt-0.5">
+                {phoneError}
+              </p>
             )}
           </div>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-gray-400 text-xs">(optional)</span>
+          <div className="space-y-1.5">
+            <label className="block text-xs font-medium text-slate-600">
+              Notes{" "}
+              <span className="text-slate-400 text-[11px]">(optional)</span>
             </label>
             <textarea
-              className="w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"
-              placeholder="VIP customer, prefers voice notes, etc."
+              className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition resize-none"
+              placeholder="VIP customer, context, preferences…"
               rows={3}
               value={form.notes}
               onChange={(e) => handleChange("notes", e.target.value)}
@@ -171,14 +175,16 @@ const ContactModal = ({
           </div>
 
           {errorMessage && (
-            <div className="text-sm text-red-500">{errorMessage}</div>
+            <div className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+              {errorMessage}
+            </div>
           )}
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-2 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-lg bg-gray-50 hover:bg-gray-100 text-sm"
+              className="px-3.5 py-2 rounded-lg text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-200 transition"
               disabled={loading}
             >
               Cancel
@@ -186,14 +192,14 @@ const ContactModal = ({
             <button
               type="submit"
               disabled={disabled}
-              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
+              className={`px-3.5 py-2 rounded-lg text-xs font-medium flex items-center gap-1.5 shadow-sm transition ${
                 disabled
-                  ? "bg-green-300 cursor-not-allowed text-white"
-                  : "bg-green-600 hover:bg-green-700 text-white"
+                  ? "bg-emerald-300 text-white cursor-not-allowed"
+                  : "bg-emerald-600 hover:bg-emerald-700 text-white"
               }`}
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {mode === "edit" ? "Save changes" : "Save contact"}
+              {loading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+              {mode === "edit" ? "Save changes" : "Create contact"}
             </button>
           </div>
         </form>
@@ -203,7 +209,7 @@ const ContactModal = ({
 };
 
 // -----------------------------
-// Details drawer (WhatsApp-style)
+// Details drawer (SaaS minimal)
 // -----------------------------
 const ContactDetailsDrawer = ({
   contact,
@@ -227,112 +233,130 @@ const ContactDetailsDrawer = ({
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 w-[340px] max-w-[90vw] bg-white border-l shadow-xl z-40 flex flex-col">
-      <div className="flex items-center justify-between px-4 py-3 border-b">
-        <h3 className="text-sm font-semibold text-gray-900">Contact details</h3>
+    <div className="fixed inset-y-0 right-0 w-[360px] max-w-[100vw] bg-white/95 backdrop-blur-sm border-l border-slate-200 shadow-xl z-40 flex flex-col">
+      <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+        <h3 className="text-xs font-semibold tracking-wide text-slate-500 uppercase">
+          Contact details
+        </h3>
         <button
           type="button"
           onClick={onClose}
-          className="p-1 rounded-full hover:bg-gray-100"
+          className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
         >
-          <X className="w-4 h-4" />
+          <X className="w-4 h-4 text-slate-500" />
         </button>
       </div>
 
-      <div className="p-4 flex flex-col gap-4 overflow-y-auto flex-1">
+      <div className="p-5 flex flex-col gap-5 overflow-y-auto flex-1 text-sm">
+        {/* Header */}
         <div className="flex items-center gap-3">
           <Avatar name={contact.name || contact.phone || "?"} />
-          <div className="min-w-0">
-            <div className="font-semibold text-gray-900 truncate">
+          <div className="min-w-0 space-y-0.5">
+            <div className="font-semibold text-slate-900 truncate text-sm">
               {contact.name || "Unknown"}
             </div>
-            <div className="text-xs text-gray-600 break-all">
+            <div className="text-[11px] text-slate-500 break-all">
               {contact.phone || "No phone"}
             </div>
           </div>
         </div>
 
-        <div className="flex gap-2 mt-1">
+        {/* Quick actions */}
+        <div className="flex gap-2">
           <button
             type="button"
             onClick={onOpenChat}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-xs"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-emerald-600 text-white text-xs font-medium hover:bg-emerald-700 shadow-sm transition"
           >
-            <MessageCircle className="w-3 h-3" />
+            <MessageCircle className="w-3.5 h-3.5" />
             Open chat
           </button>
           <button
             type="button"
             onClick={onCall}
-            className="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded-lg bg-gray-100 hover:bg-gray-200 text-gray-800 text-xs"
+            className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-medium hover:bg-slate-200 border border-slate-200 transition"
           >
-            <PhoneCall className="w-3 h-3" />
+            <PhoneCall className="w-3.5 h-3.5" />
             Call
           </button>
         </div>
 
-        <div className="border rounded-lg p-3 bg-gray-50">
-          <div className="text-xs font-semibold text-gray-500 mb-1">
+        {/* Overview */}
+        <section className="space-y-2">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Overview
           </div>
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-gray-500">Created</span>
-            <span className="text-gray-800">{formatDate(createdAt) || "-"}</span>
+          <div className="rounded-2xl bg-slate-50/80 border border-slate-100 px-3 py-3 space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Created</span>
+              <span className="text-slate-800">
+                {formatDate(createdAt) || "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Last activity</span>
+              <span className="text-slate-800">
+                {lastActivity ? formatDate(lastActivity) : "—"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between text-[11px]">
+              <span className="text-slate-500">Activity level</span>
+              <span
+                className={
+                  activityLabel === "High"
+                    ? "text-emerald-600 font-medium"
+                    : activityLabel === "Medium"
+                    ? "text-amber-600 font-medium"
+                    : "text-slate-500"
+                }
+              >
+                {activityLabel}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-gray-500">Last activity</span>
-            <span className="text-gray-800">
-              {lastActivity ? formatDate(lastActivity) : "-"}
-            </span>
-          </div>
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-gray-500">Activity level</span>
-            <span
-              className={
-                activityLabel === "High"
-                  ? "text-green-600"
-                  : activityLabel === "Medium"
-                  ? "text-yellow-600"
-                  : "text-gray-500"
-              }
-            >
-              {activityLabel}
-            </span>
-          </div>
-        </div>
+        </section>
 
-        <div className="border rounded-lg p-3">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-xs font-semibold text-gray-500">Notes</span>
+        {/* Notes */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+              Notes
+            </div>
             <button
               type="button"
               onClick={onCopyPhone}
-              className="flex items-center gap-1 text-[11px] text-gray-500 hover:text-gray-800"
+              className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800"
             >
               <CopyIcon className="w-3 h-3" />
               Copy phone
             </button>
           </div>
-          <div className="text-xs text-gray-800 whitespace-pre-wrap min-h-[40px]">
-            {contact.notes || "No notes yet."}
+          <div className="rounded-2xl border border-slate-100 bg-white px-3 py-3 min-h-[54px] text-[12px] text-slate-800 whitespace-pre-wrap">
+            {contact.notes || "No notes added yet."}
           </div>
-        </div>
+        </section>
 
-        <div className="border rounded-lg p-3 bg-gray-50">
-          <div className="text-xs font-semibold text-gray-500 mb-1">
-            System info
+        {/* System info + last message */}
+        <section className="space-y-2">
+          <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
+            System
           </div>
-          <div className="text-[11px] text-gray-500 space-y-1">
-            <div>ID: {contact._id || "—"}</div>
+          <div className="rounded-2xl border border-slate-100 bg-slate-50/60 px-3 py-3 space-y-2 text-[11px] text-slate-600">
+            <div className="flex items-center justify-between">
+              <span>ID</span>
+              <span className="font-mono text-[10px] text-slate-500 max-w-[200px] truncate">
+                {contact._id || "—"}
+              </span>
+            </div>
             {contact.lastMessage && (
-              <div className="mt-1">
-                <div className="font-semibold text-gray-600 text-[11px]">
+              <div className="space-y-1 pt-1 border-t border-slate-100">
+                <div className="font-medium text-slate-600 text-[11px]">
                   Last message
                 </div>
-                <div className="line-clamp-2 text-gray-700">
+                <div className="text-[11px] text-slate-700 line-clamp-2">
                   {contact.lastMessage}
                 </div>
-                <div className="text-[10px] text-gray-400 mt-0.5">
+                <div className="text-[10px] text-slate-400">
                   {formatExactDateTime(
                     contact.lastMessageAt ||
                       contact.updatedAt ||
@@ -342,14 +366,14 @@ const ContactDetailsDrawer = ({
               </div>
             )}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );
 };
 
 // -----------------------------
-// Duplicate banner
+// Duplicate banner (minimal)
 // -----------------------------
 const DuplicateBanner = ({
   info,
@@ -363,12 +387,14 @@ const DuplicateBanner = ({
   const { first, second } = info;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-full max-w-xl px-4">
-      <div className="bg-white border border-yellow-200 shadow-lg rounded-lg p-3 flex items-center gap-3">
-        <AlertTriangle className="w-5 h-5 text-yellow-500 flex-shrink-0" />
-        <div className="flex-1 text-xs text-gray-700">
-          <div className="font-semibold mb-1">
-            Possible duplicate contacts detected
+    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-30 w-full max-w-lg px-4">
+      <div className="bg-white/95 backdrop-blur-sm border border-amber-200 shadow-lg rounded-2xl p-3.5 flex items-start gap-3">
+        <div className="mt-0.5">
+          <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+        </div>
+        <div className="flex-1 text-xs text-slate-700 space-y-1">
+          <div className="font-semibold text-slate-900">
+            Possible duplicate contacts
           </div>
           <div className="space-y-0.5">
             <div>
@@ -381,7 +407,7 @@ const DuplicateBanner = ({
                 {second.name || "Unnamed"} ({second.phone})
               </span>
             </div>
-            <div className="text-[11px] text-gray-500 mt-1">
+            <div className="text-[11px] text-slate-500 mt-0.5">
               They share the same normalized phone. Choose one to keep or
               ignore.
             </div>
@@ -393,7 +419,7 @@ const DuplicateBanner = ({
             type="button"
             disabled={loading}
             onClick={onMergeKeepFirst}
-            className="text-[11px] px-2 py-1 rounded bg-green-600 text-white hover:bg-green-700"
+            className="text-[11px] px-2.5 py-1 rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-70 disabled:cursor-not-allowed"
           >
             Keep first
           </button>
@@ -401,7 +427,7 @@ const DuplicateBanner = ({
             type="button"
             disabled={loading}
             onClick={onMergeKeepSecond}
-            className="text-[11px] px-2 py-1 rounded bg-gray-800 text-white hover:bg-gray-900"
+            className="text-[11px] px-2.5 py-1 rounded-lg bg-slate-900 text-white hover:bg-black disabled:opacity-70 disabled:cursor-not-allowed"
           >
             Keep second
           </button>
@@ -409,7 +435,7 @@ const DuplicateBanner = ({
             type="button"
             disabled={loading}
             onClick={onDismiss}
-            className="text-[10px] text-gray-500 hover:text-gray-800"
+            className="text-[10px] text-slate-500 hover:text-slate-800"
           >
             Ignore
           </button>
@@ -422,7 +448,7 @@ const DuplicateBanner = ({
 // -----------------------------
 // Main Contacts View
 // -----------------------------
-const ContactsView = ({ onSelectContact }) => {
+const ContactsView = ({ onSelectContact, onContactsChange }) => {
   const [contacts, setContacts] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -441,14 +467,20 @@ const ContactsView = ({ onSelectContact }) => {
   const [duplicateLoading, setDuplicateLoading] = useState(false);
 
   const [copyToast, setCopyToast] = useState("");
+  const [openMenuId, setOpenMenuId] = useState(null);
 
-  // Load contacts
+  // sync helper
+  const syncContacts = (next) => {
+    setContacts(next);
+    onContactsChange?.(next);
+  };
+
   const loadContacts = async (q = "") => {
     try {
       setLoading(true);
       setError("");
       const data = await getContacts(q);
-      setContacts(data || []);
+      syncContacts(data || []);
     } catch (err) {
       console.error("Failed to load contacts:", err);
       setError("Failed to load contacts. Please try again.");
@@ -485,7 +517,7 @@ const ContactsView = ({ onSelectContact }) => {
     loadContacts();
   }, []);
 
-  // Search
+  // Search logic
   const filteredContacts = useMemo(() => {
     if (!query.trim()) return contacts;
 
@@ -517,11 +549,11 @@ const ContactsView = ({ onSelectContact }) => {
     arr.sort((a, b) => {
       const aFav = favSet.has(a._id);
       const bFav = favSet.has(b._id);
-      if (aFav !== bFav) return aFav ? -1 : 1; // favorites first
+      if (aFav !== bFav) return aFav ? -1 : 1;
 
       const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
       const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
-      return bTime - aTime; // newest first
+      return bTime - aTime;
     });
 
     return arr;
@@ -560,18 +592,19 @@ const ContactsView = ({ onSelectContact }) => {
 
       if (modalMode === "create") {
         const created = await createContact(payload);
-        setContacts((prev) => [created, ...prev]);
+        const next = [created, ...contacts];
+        syncContacts(next);
 
-        // Duplicate detection (based on normalized phone)
         const maybeDup = findDuplicateForContact(created, contacts);
         if (maybeDup) {
           setDuplicateInfo(maybeDup);
         }
       } else if (modalMode === "edit" && editingContact) {
         const updated = await updateContact(editingContact._id, payload);
-        setContacts((prev) =>
-          prev.map((c) => (c._id === updated._id ? updated : c))
+        const next = contacts.map((c) =>
+          c._id === updated._id ? updated : c
         );
+        syncContacts(next);
 
         const maybeDup = findDuplicateForContact(
           updated,
@@ -601,9 +634,9 @@ const ContactsView = ({ onSelectContact }) => {
     try {
       setLoadingAction(true);
       await deleteContact(contactId);
-      setContacts((prev) => prev.filter((c) => c._id !== contactId));
+      const next = contacts.filter((c) => c._id !== contactId);
+      syncContacts(next);
 
-      // also remove from favorites if present
       if (favorites.includes(contactId)) {
         const nextFav = favorites.filter((id) => id !== contactId);
         persistFavorites(nextFav);
@@ -662,10 +695,7 @@ const ContactsView = ({ onSelectContact }) => {
       const removeInState =
         contacts.find((c) => c._id === remove._id) || remove;
 
-      const mergedNotes = [
-        keepInState.notes,
-        removeInState.notes,
-      ]
+      const mergedNotes = [keepInState.notes, removeInState.notes]
         .filter(Boolean)
         .join("\n");
 
@@ -678,13 +708,11 @@ const ContactsView = ({ onSelectContact }) => {
       const updated = await updateContact(keepInState._id, payload);
       await deleteContact(removeInState._id);
 
-      setContacts((prev) =>
-        prev
-          .filter((c) => c._id !== removeInState._id)
-          .map((c) => (c._id === updated._id ? updated : c))
-      );
+      const next = contacts
+        .filter((c) => c._id !== removeInState._id)
+        .map((c) => (c._id === updated._id ? updated : c));
+      syncContacts(next);
 
-      // Remove deleted from favorites
       if (favorites.includes(removeInState._id)) {
         const nextFav = favorites.filter((id) => id !== removeInState._id);
         persistFavorites(nextFav);
@@ -693,45 +721,51 @@ const ContactsView = ({ onSelectContact }) => {
       setDuplicateInfo(null);
     } catch (err) {
       console.error("Merge contacts failed:", err);
-      alert(
-        "Failed to merge contacts. You can still edit them manually."
-      );
+      alert("Failed to merge contacts. You can still edit them manually.");
     } finally {
       setDuplicateLoading(false);
     }
   };
 
-  return (
-    <div className="flex flex-col h-full bg-gray-50 relative">
-      {/* HEADER */}
-      <div className="px-6 py-4 bg-white border-b flex items-center justify-between sticky top-0 z-20">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
-          <p className="text-xs text-gray-500">
-            Manage saved customers and quickly jump into chats.
-          </p>
-        </div>
+  const handleCardClick = (c) => {
+    if (onSelectContact) onSelectContact(c);
+  };
 
-        <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
-        >
-          <UserPlus className="w-4 h-4" />
-          New contact
-        </button>
+  const handleMenuToggle = (id) => {
+    setOpenMenuId((prev) => (prev === id ? null : id));
+  };
+
+  return (
+    <div className="relative flex flex-col h-full bg-slate-50/70">
+      {/* HEADER */}
+      <div className="px-6 pt-5 pb-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-20">
+        <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
+          <div className="space-y-0.5">
+            <h2 className="text-sm font-semibold text-slate-900 tracking-tight">
+              Contacts
+            </h2>
+            <p className="text-[11px] text-slate-500">
+              Lightweight CRM for your WhatsApp customers.
+            </p>
+          </div>
+          <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400">
+            <Users className="w-3.5 h-3.5" />
+            <span>{contacts.length} saved</span>
+          </div>
+        </div>
       </div>
 
-      {/* SEARCH + CONTENT */}
-      <div className="flex justify-center w-full flex-1 px-4">
-        <div className="w-full max-w-2xl py-4 flex flex-col h-full">
+      {/* CONTENT */}
+      <div className="flex-1 overflow-y-auto px-4 pb-10">
+        <div className="max-w-2xl mx-auto pt-4 flex flex-col h-full">
           {/* Search */}
           <div className="mb-4">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
               <input
                 type="text"
                 placeholder="Search by name, phone, or notes…"
-                className="w-full pl-10 pr-4 py-2 rounded-lg bg-white shadow-sm border border-gray-200 focus:ring-2 focus:ring-green-500 focus:outline-none text-sm"
+                className="w-full pl-10 pr-4 py-2.5 rounded-full bg-white border border-slate-200 shadow-sm text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:border-transparent transition"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
               />
@@ -740,35 +774,39 @@ const ContactsView = ({ onSelectContact }) => {
 
           {/* Error */}
           {error && (
-            <div className="mb-3 text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+            <div className="mb-3 text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
               {error}
             </div>
           )}
 
           {/* Loading */}
           {loading && (
-            <div className="flex flex-1 items-center justify-center py-12 text-gray-400">
+            <div className="flex flex-1 items-center justify-center py-16 text-slate-400">
               <div className="flex flex-col items-center gap-2">
                 <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-sm">Loading contacts…</span>
+                <span className="text-xs">Loading contacts…</span>
               </div>
             </div>
           )}
 
           {/* Empty state */}
           {!loading && sortedContacts.length === 0 && (
-            <div className="flex flex-1 flex-col items-center justify-center text-gray-400 py-16">
-              <Users className="w-10 h-10 text-gray-300 mb-3" />
-              <p className="text-sm font-medium">No contacts found</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Try a different search or create a new contact.
+            <div className="flex flex-1 flex-col items-center justify-center text-slate-400 py-20">
+              <div className="mb-4 rounded-full bg-white shadow-sm border border-slate-100 w-14 h-14 flex items-center justify-center">
+                <Users className="w-6 h-6 text-slate-300" />
+              </div>
+              <p className="text-sm font-medium text-slate-700">
+                No contacts yet
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">
+                Create your first contact to start building your customer list.
               </p>
             </div>
           )}
 
           {/* List */}
           {!loading && sortedContacts.length > 0 && (
-            <div className="space-y-2 overflow-y-auto pb-4">
+            <div className="space-y-2.5">
               {sortedContacts.map((c) => {
                 const isFav = favorites.includes(c._id);
                 const createdLabel = formatDate(c.createdAt);
@@ -776,125 +814,149 @@ const ContactsView = ({ onSelectContact }) => {
                 return (
                   <div
                     key={c._id}
-                    className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center gap-3 border border-gray-200 hover:shadow-md hover:border-green-300 transition group"
+                    className="relative group rounded-2xl bg-white border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.12)] hover:border-emerald-100 transition-all duration-150"
                   >
-                    {/* MAIN CLICK AREA – still opens chat to NOT break behavior */}
                     <button
                       type="button"
-                      onClick={() =>
-                        onSelectContact && onSelectContact(c)
-                      }
-                      className="flex items-center gap-3 flex-1 text-left"
+                      onClick={() => handleCardClick(c)}
+                      className="w-full flex items-center justify-between px-4 py-3 text-left"
                     >
-                      <Avatar name={c.name || c.phone || "?"} />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <div className="font-medium text-gray-900 text-sm truncate">
-                            {c.name || "Unknown"}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <Avatar name={c.name || c.phone || "?"} />
+                        <div className="min-w-0 space-y-0.5">
+                          <div className="flex items-center gap-2">
+                            <p className="text-sm font-medium text-slate-900 truncate">
+                              {c.name || "Unknown"}
+                            </p>
+                            {isFav && (
+                              <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-100">
+                                Favorite
+                              </span>
+                            )}
                           </div>
-                          {isFav && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-yellow-100 text-yellow-700">
-                              Favorite
-                            </span>
+                          <p className="text-[11px] text-slate-500 break-all">
+                            {c.phone}
+                          </p>
+                          {c.notes && (
+                            <p className="text-[11px] text-slate-500 line-clamp-1">
+                              {c.notes}
+                            </p>
                           )}
                         </div>
-                        <div className="text-xs text-gray-600">
-                          {c.phone}
-                        </div>
-                        {c.notes && (
-                          <div className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
-                            {c.notes}
-                          </div>
-                        )}
                       </div>
-                    </button>
 
-                    {/* Right meta + actions */}
-                    <div className="flex flex-col items-end justify-between gap-1 ml-2">
-                      <div className="text-[10px] text-gray-400">
-                        {createdLabel}
-                      </div>
-                      <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                        {/* Favorite */}
+                      <div className="flex items-center gap-2 ml-4">
+                        <span className="hidden sm:inline-block text-[10px] text-slate-400">
+                          {createdLabel}
+                        </span>
+
+                        {/* Favorite toggle */}
                         <button
                           type="button"
-                          onClick={() => toggleFavorite(c._id)}
-                          className="p-1 rounded-full hover:bg-yellow-50"
-                          title={
-                            isFav ? "Remove from favorites" : "Favorite"
-                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleFavorite(c._id);
+                          }}
+                          className="p-1.5 rounded-full hover:bg-amber-50 transition-colors"
+                          title={isFav ? "Remove from favorites" : "Favorite"}
                         >
                           {isFav ? (
-                            <Star className="w-3 h-3 text-yellow-500" />
+                            <Star className="w-3.5 h-3.5 text-amber-500" />
                           ) : (
-                            <StarOff className="w-3 h-3 text-gray-400" />
+                            <StarOff className="w-3.5 h-3.5 text-slate-400" />
                           )}
                         </button>
 
-                        {/* Call */}
-                        <button
-                          type="button"
-                          onClick={() => handleCall(c.phone)}
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          title="Call"
-                        >
-                          <PhoneCall className="w-3 h-3 text-gray-500" />
-                        </button>
+                        {/* Menu toggle */}
+                        <div className="relative">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleMenuToggle(c._id);
+                            }}
+                            className="p-1.5 rounded-full hover:bg-slate-100 transition-colors"
+                          >
+                            <MoreHorizontal className="w-4 h-4 text-slate-500" />
+                          </button>
 
-                        {/* Copy phone */}
-                        <button
-                          type="button"
-                          onClick={() => handleCopyPhone(c.phone)}
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          title="Copy phone"
-                        >
-                          <CopyIcon className="w-3 h-3 text-gray-500" />
-                        </button>
-
-                        {/* Open chat (explicit button, in addition to card click) */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onSelectContact && onSelectContact(c)
-                          }
-                          className="p-1 rounded-full hover:bg-green-50"
-                          title="Open chat"
-                        >
-                          <MessageCircle className="w-3 h-3 text-green-600" />
-                        </button>
-
-                        {/* Details */}
-                        <button
-                          type="button"
-                          onClick={() => openDetails(c)}
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          title="View details"
-                        >
-                          <Info className="w-3 h-3 text-gray-500" />
-                        </button>
-
-                        {/* Edit */}
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(c)}
-                          className="p-1 rounded-full hover:bg-gray-100"
-                          title="Edit contact"
-                        >
-                          <Pencil className="w-3 h-3 text-gray-500" />
-                        </button>
-
-                        {/* Delete */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteContact(c._id)}
-                          className="p-1 rounded-full hover:bg-red-50"
-                          title="Delete contact"
-                          disabled={loadingAction}
-                        >
-                          <Trash2 className="w-3 h-3 text-red-500" />
-                        </button>
+                          {openMenuId === c._id && (
+                            <div
+                              className="absolute right-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-20"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCardClick(c);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                Open chat
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCall(c.phone);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50"
+                              >
+                                <PhoneCall className="w-3.5 h-3.5 text-slate-500" />
+                                Call
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  handleCopyPhone(c.phone);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50"
+                              >
+                                <CopyIcon className="w-3.5 h-3.5 text-slate-500" />
+                                Copy phone
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  openDetails(c);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50"
+                              >
+                                <Info className="w-3.5 h-3.5 text-slate-500" />
+                                View details
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  openEditModal(c);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-slate-50"
+                              >
+                                <Pencil className="w-3.5 h-3.5 text-slate-500" />
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                disabled={loadingAction}
+                                onClick={() => {
+                                  handleDeleteContact(c._id);
+                                  setOpenMenuId(null);
+                                }}
+                                className="w-full flex items-center gap-2 px-3 py-2 hover:bg-red-50 text-red-600"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                                Delete
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                    </div>
+                    </button>
                   </div>
                 );
               })}
@@ -902,6 +964,16 @@ const ContactsView = ({ onSelectContact }) => {
           )}
         </div>
       </div>
+
+      {/* Floating "New contact" button */}
+      <button
+        type="button"
+        onClick={openCreateModal}
+        className="fixed bottom-6 right-6 z-30 inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-emerald-600 text-white text-xs font-medium shadow-lg shadow-emerald-600/25 hover:bg-emerald-700 transition"
+      >
+        <UserPlus className="w-4 h-4" />
+        New contact
+      </button>
 
       {/* Modal */}
       {showModal && (
@@ -953,7 +1025,7 @@ const ContactsView = ({ onSelectContact }) => {
 
       {/* copy toast */}
       {copyToast && (
-        <div className="fixed bottom-4 right-4 z-30 px-3 py-2 rounded-lg bg-black/80 text-white text-xs">
+        <div className="fixed bottom-5 right-5 z-30 px-3 py-2 rounded-full bg-slate-900/90 text-white text-[11px] shadow-lg">
           {copyToast}
         </div>
       )}
