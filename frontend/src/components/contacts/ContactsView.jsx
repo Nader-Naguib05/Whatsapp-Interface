@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Search,
   UserPlus,
@@ -7,6 +7,9 @@ import {
   Pencil,
   Trash2,
   X,
+  Copy,
+  MessageCircle,
+  ChevronDown,
 } from "lucide-react";
 import {
   getContacts,
@@ -15,6 +18,7 @@ import {
   deleteContact,
 } from "../../api/contacts";
 
+// ----- Avatar -----
 const Avatar = ({ name }) => {
   if (!name) {
     return (
@@ -32,12 +36,14 @@ const Avatar = ({ name }) => {
     .toUpperCase()
     .slice(0, 2);
 
-  return
+  return (
     <div className="flex items-center justify-center bg-green-700/15 text-green-700 rounded-full w-11 h-11 font-semibold">
       {initials}
-    </div>;
+    </div>
+  );
 };
 
+// ----- Contact Modal -----
 const ContactModal = ({
   mode,
   initial,
@@ -46,11 +52,17 @@ const ContactModal = ({
   loading,
   errorMessage,
 }) => {
+  const nameRef = useRef(null);
+
   const [form, setForm] = useState({
     name: initial?.name || "",
     phone: initial?.phone || "",
     notes: initial?.notes || "",
   });
+
+  useEffect(() => {
+    nameRef.current?.focus();
+  }, []);
 
   const [touched, setTouched] = useState(false);
 
@@ -98,6 +110,7 @@ const ContactModal = ({
               Full name
             </label>
             <input
+              ref={nameRef}
               className={`w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none ${
                 nameError ? "border-red-400" : ""
               }`}
@@ -172,8 +185,12 @@ const ContactModal = ({
   );
 };
 
+// ----- Main View -----
 const ContactsView = ({ onSelectContact }) => {
+  const searchRef = useRef(null);
+
   const [contacts, setContacts] = useState([]);
+  const [sort, setSort] = useState("recent"); // "recent" | "az"
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingAction, setLoadingAction] = useState(false);
@@ -181,18 +198,20 @@ const ContactsView = ({ onSelectContact }) => {
   const [modalError, setModalError] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState("create"); // "create" | "edit"
+  const [modalMode, setModalMode] = useState("create");
   const [editingContact, setEditingContact] = useState(null);
 
-  const loadContacts = async (q = "") => {
+  useEffect(() => {
+    searchRef.current?.focus();
+  }, []);
+
+  const loadContacts = async () => {
     try {
       setLoading(true);
-      setError("");
-      const data = await getContacts(q);
+      const data = await getContacts();
       setContacts(data);
     } catch (err) {
-      console.error("Failed to load contacts:", err);
-      setError("Failed to load contacts. Please try again.");
+      setError("Failed to load contacts.");
     } finally {
       setLoading(false);
     }
@@ -202,15 +221,28 @@ const ContactsView = ({ onSelectContact }) => {
     loadContacts();
   }, []);
 
+  const sortedContacts = useMemo(() => {
+    let list = [...contacts];
+
+    if (sort === "az") {
+      list.sort((a, b) => a.name.localeCompare(b.name));
+    } else {
+      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    }
+
+    return list;
+  }, [contacts, sort]);
+
   const filteredContacts = useMemo(() => {
-    if (!query.trim()) return contacts;
+    if (!query.trim()) return sortedContacts;
+
     const q = query.toLowerCase();
-    return contacts.filter(
+    return sortedContacts.filter(
       (c) =>
         c.name?.toLowerCase().includes(q) ||
         c.phone?.toLowerCase().includes(q)
     );
-  }, [contacts, query]);
+  }, [sortedContacts, query]);
 
   const openCreateModal = () => {
     setModalMode("create");
@@ -229,12 +261,11 @@ const ContactsView = ({ onSelectContact }) => {
   const handleSaveContact = async (payload) => {
     try {
       setLoadingAction(true);
-      setModalError("");
 
       if (modalMode === "create") {
-        const created = await createContact(payload);
-        setContacts((prev) => [created, ...prev]);
-      } else if (modalMode === "edit" && editingContact) {
+        const c = await createContact(payload);
+        setContacts((prev) => [c, ...prev]);
+      } else {
         const updated = await updateContact(editingContact._id, payload);
         setContacts((prev) =>
           prev.map((c) => (c._id === updated._id ? updated : c))
@@ -244,29 +275,26 @@ const ContactsView = ({ onSelectContact }) => {
       setShowModal(false);
       setEditingContact(null);
     } catch (err) {
-      console.error("Save contact failed:", err);
-      setModalError(
-        err.response?.data?.error || "Failed to save contact. Try again."
-      );
+      setModalError("Failed to save contact.");
     } finally {
       setLoadingAction(false);
     }
   };
 
-  const handleDeleteContact = async (contactId) => {
-    const confirmed = window.confirm("Delete this contact?");
-    if (!confirmed) return;
+  const handleDeleteContact = async (id) => {
+    if (!window.confirm("Delete this contact?")) return;
 
     try {
       setLoadingAction(true);
-      await deleteContact(contactId);
-      setContacts((prev) => prev.filter((c) => c._id !== contactId));
-    } catch (err) {
-      console.error("Delete contact failed:", err);
-      alert("Failed to delete contact.");
+      await deleteContact(id);
+      setContacts((prev) => prev.filter((c) => c._id !== id));
     } finally {
       setLoadingAction(false);
     }
+  };
+
+  const handleCopy = (phone) => {
+    navigator.clipboard.writeText(phone);
   };
 
   return (
@@ -285,111 +313,107 @@ const ContactsView = ({ onSelectContact }) => {
           className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
         >
           <UserPlus className="w-4 h-4" />
-          New contact
+          New
         </button>
       </div>
 
-      {/* SEARCH + CONTENT */}
+      {/* SEARCH + SORT */}
+      <div className="px-6 pt-4 flex items-center gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <input
+            ref={searchRef}
+            type="text"
+            placeholder="Search contacts…"
+            className="w-full pl-10 pr-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm focus:ring-2 focus:ring-green-500 focus:outline-none text-sm"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="relative">
+          <select
+            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+          >
+            <option value="recent">Newest</option>
+            <option value="az">A → Z</option>
+          </select>
+        </div>
+      </div>
+
+      {/* CONTENT */}
       <div className="flex justify-center w-full flex-1 px-4">
         <div className="w-full max-w-2xl py-4 flex flex-col h-full">
-          {/* Search */}
-          <div className="mb-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <input
-                type="text"
-                placeholder="Search by name or phone…"
-                className="w-full pl-10 pr-4 py-2 rounded-lg bg-white shadow-sm border border-gray-200 focus:ring-2 focus:ring-green-500 focus:outline-none text-sm"
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-              />
-            </div>
-          </div>
 
-          {/* Error */}
-          {error && (
-            <div className="mb-3 text-sm text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
-              {error}
-            </div>
-          )}
-
-          {/* Loading */}
           {loading && (
             <div className="flex flex-1 items-center justify-center py-12 text-gray-400">
-              <div className="flex flex-col items-center gap-2">
-                <Loader2 className="w-6 h-6 animate-spin" />
-                <span className="text-sm">Loading contacts…</span>
-              </div>
+              <Loader2 className="w-6 h-6 animate-spin" />
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && filteredContacts.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center text-gray-400 py-16">
               <Users className="w-10 h-10 text-gray-300 mb-3" />
               <p className="text-sm font-medium">No contacts found</p>
-              <p className="text-xs text-gray-400 mt-1">
-                Try a different search or create a new contact.
-              </p>
             </div>
           )}
 
-          {/* List */}
           {!loading && filteredContacts.length > 0 && (
             <div className="space-y-2 overflow-y-auto pb-4">
               {filteredContacts.map((c) => (
                 <div
                   key={c._id}
-                  className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center gap-3 border border-gray-200 hover:shadow-md hover:border-green-300 transition group"
+                  className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center gap-3 border border-gray-200 hover:shadow-md transition group"
                 >
-                  <button
-                    type="button"
-                    onClick={() => onSelectContact && onSelectContact(c)}
-                    className="flex items-center gap-3 flex-1 text-left"
-                  >
-                    <Avatar name={c.name} />
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                        <div className="font-medium text-gray-900 text-sm truncate">
-                          {c.name}
-                        </div>
-                      </div>
-                      <div className="text-xs text-gray-600">
-                        {c.phone}
-                      </div>
-                      {c.notes && (
-                        <div className="text-[11px] text-gray-400 mt-0.5 line-clamp-1">
-                          {c.notes}
-                        </div>
-                      )}
-                    </div>
-                  </button>
+                  <Avatar name={c.name} />
 
-                  <div className="flex flex-col items-end justify-between gap-1">
-                    <div className="text-[10px] text-gray-400">
-                      {c.createdAt
-                        ? new Date(c.createdAt).toLocaleDateString()
-                        : ""}
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium text-gray-900 text-sm truncate">
+                      {c.name}
                     </div>
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                      <button
-                        type="button"
-                        onClick={() => openEditModal(c)}
-                        className="p-1 rounded-full hover:bg-gray-100"
-                        title="Edit contact"
-                      >
-                        <Pencil className="w-3 h-3 text-gray-500" />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteContact(c._id)}
-                        className="p-1 rounded-full hover:bg-red-50"
-                        title="Delete contact"
-                        disabled={loadingAction}
-                      >
-                        <Trash2 className="w-3 h-3 text-red-500" />
-                      </button>
-                    </div>
+                    <div className="text-xs text-gray-600">{c.phone}</div>
+                    {c.notes && (
+                      <div className="text-[11px] text-gray-400 line-clamp-1">
+                        {c.notes}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                    <button
+                      className="p-1 hover:bg-green-50 rounded-full"
+                      title="Start chat"
+                      onClick={() => onSelectContact(c)}
+                    >
+                      <MessageCircle className="w-4 h-4 text-green-600" />
+                    </button>
+
+                    <button
+                      className="p-1 hover:bg-gray-100 rounded-full"
+                      title="Copy number"
+                      onClick={() => handleCopy(c.phone)}
+                    >
+                      <Copy className="w-4 h-4 text-gray-500" />
+                    </button>
+
+                    <button
+                      className="p-1 hover:bg-gray-100 rounded-full"
+                      onClick={() => openEditModal(c)}
+                      title="Edit"
+                    >
+                      <Pencil className="w-4 h-4 text-gray-500" />
+                    </button>
+
+                    <button
+                      className="p-1 hover:bg-red-50 rounded-full"
+                      onClick={() => handleDeleteContact(c._id)}
+                      disabled={loadingAction}
+                      title="Delete"
+                    >
+                      <Trash2 className="w-4 h-4 text-red-500" />
+                    </button>
                   </div>
                 </div>
               ))}
@@ -398,7 +422,7 @@ const ContactsView = ({ onSelectContact }) => {
         </div>
       </div>
 
-      {/* Modal */}
+      {/* MODAL */}
       {showModal && (
         <ContactModal
           mode={modalMode}

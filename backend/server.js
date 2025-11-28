@@ -1,4 +1,3 @@
-// server.mjs
 import dotenv from 'dotenv';
 dotenv.config();
 
@@ -15,6 +14,7 @@ import authRoutes from "./routes/auth.js";
 import broadcastRoutes from "./routes/broadcast.js";
 import mediaRoutes from "./routes/media.js";
 import analyticsRoutes from "./routes/analytics.js";
+import contactRoutes from "./routes/contact.js";
 import { setupSockets } from './sockets/chatSocket.js';
 
 const app = express();
@@ -33,6 +33,7 @@ app.use('/conversations', conversationRoutes);
 app.use('/broadcast', broadcastRoutes);
 app.use('/media', mediaRoutes);
 app.use('/analytics', analyticsRoutes);
+app.use('/contacts', contactRoutes);
 app.use('/auth', authRoutes);
 
 
