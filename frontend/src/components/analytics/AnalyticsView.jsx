@@ -16,13 +16,12 @@ function formatDuration(seconds) {
 }
 
 const LoadingState = () => (
-    <div className="h-full flex items-center justify-center">
-        <div className="flex flex-col items-center gap-3 text-gray-500">
-            <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
-            <p className="text-sm">Loading analytics…</p>
-        </div>
-    </div>
+  <div className="flex flex-col items-center gap-3 text-gray-500">
+    <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+    <p className="text-sm">Loading analytics…</p>
+  </div>
 );
+
 
 const ErrorState = ({ message, onRetry }) => (
     <div className="h-full flex items-center justify-center px-4">
@@ -92,15 +91,15 @@ const AnalyticsView = () => {
     }, []);
 
     if (loading) {
-        return (
-            <div className="min-h-screen flex items-center justify-center bg-slate-50">
-                <div className="flex flex-col items-center gap-3 text-gray-500">
-                    <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
-                    <p className="text-sm">Loading analytics…</p>
-                </div>
-            </div>
-        );
-    }
+  return (
+    <div className="relative w-full h-full">
+      <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+        <LoadingState />
+      </div>
+    </div>
+  );
+}
+
 
     if (error) return <ErrorState message={error} onRetry={fetchAnalytics} />;
 
