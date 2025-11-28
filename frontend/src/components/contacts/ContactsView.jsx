@@ -9,8 +9,12 @@ import {
   X,
   Copy,
   MessageCircle,
-  ChevronDown,
+  Phone,
+  ArrowLeft,
+  ArrowDownWideNarrow,
+  ArrowUpWideNarrow,
 } from "lucide-react";
+
 import {
   getContacts,
   createContact,
@@ -18,32 +22,117 @@ import {
   deleteContact,
 } from "../../api/contacts";
 
-// ----- Avatar -----
+// -----------------------------------------------------------------------------
+// FIXED AVATAR
+// -----------------------------------------------------------------------------
 const Avatar = ({ name }) => {
-  if (!name) {
-    return (
-      <div className="flex items-center justify-center bg-gray-200 text-gray-500 rounded-full w-11 h-11 text-sm">
-        ?
-      </div>
-    );
-  }
-
   const initials = name
-    .split(" ")
-    .filter(Boolean)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2);
+    ? name
+        .split(" ")
+        .filter(Boolean)
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+        .slice(0, 2)
+    : "?";
 
   return (
-    <div className="flex items-center justify-center bg-green-700/15 text-green-700 rounded-full w-11 h-11 font-semibold">
+    <div className="flex items-center justify-center bg-green-600/10 text-green-700 font-semibold rounded-full w-12 h-12 text-base">
       {initials}
     </div>
   );
 };
 
-// ----- Contact Modal -----
+// -----------------------------------------------------------------------------
+// CONTACT DETAILS SIDE PANEL
+// -----------------------------------------------------------------------------
+const ContactDetails = ({
+  contact,
+  onClose,
+  onEdit,
+  onDelete,
+  onStartChat,
+}) => {
+  if (!contact) return null;
+
+  return (
+    <div className="fixed top-0 right-0 h-full w-[340px] bg-white shadow-xl border-l z-40 p-5 flex flex-col animate-slide-left">
+      <div className="flex items-center justify-between mb-4">
+        <button className="p-2 hover:bg-gray-100 rounded-lg" onClick={onClose}>
+          <ArrowLeft className="w-5 h-5" />
+        </button>
+        <h2 className="font-bold text-lg">{contact.name}</h2>
+        <div className="w-5" />
+      </div>
+
+      <div className="flex justify-center mb-4">
+        <Avatar name={contact.name} />
+      </div>
+
+      <div className="space-y-4 text-sm">
+        <div>
+          <p className="text-gray-500 text-xs mb-1">Phone</p>
+          <p className="font-medium">{contact.phone}</p>
+
+          <div className="flex items-center gap-2 mt-2">
+            <button
+              className="px-3 py-1.5 bg-green-600 text-white rounded-md text-xs hover:bg-green-700 flex items-center gap-2"
+              onClick={() => onStartChat(contact)}
+            >
+              <MessageCircle className="w-4 h-4" />
+              Start Chat
+            </button>
+
+            <a
+              href={`tel:${contact.phone}`}
+              className="px-3 py-1.5 bg-gray-100 rounded-md text-xs flex items-center gap-2 hover:bg-gray-200"
+            >
+              <Phone className="w-4 h-4" />
+              Call
+            </a>
+
+            <button
+              onClick={() => navigator.clipboard.writeText(contact.phone)}
+              className="px-3 py-1.5 bg-gray-100 rounded-md text-xs flex items-center gap-2 hover:bg-gray-200"
+            >
+              <Copy className="w-4 h-4" />
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {contact.notes && (
+          <div>
+            <p className="text-gray-500 text-xs mb-1">Notes</p>
+            <p className="text-gray-700 text-sm">{contact.notes}</p>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-auto flex justify-between pt-6">
+        <button
+          onClick={() => onEdit(contact)}
+          className="px-4 py-2 bg-gray-100 rounded-md text-sm hover:bg-gray-200 flex items-center gap-2"
+        >
+          <Pencil className="w-4 h-4" />
+          Edit
+        </button>
+
+        <button
+          onClick={() => onDelete(contact._id)}
+          className="px-4 py-2 bg-red-600 text-white rounded-md text-sm hover:bg-red-700 flex items-center gap-2"
+        >
+          <Trash2 className="w-4 h-4" />
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+};
+
+// -----------------------------------------------------------------------------
+// CONTACT MODAL (same as before but fixed autofocus)
+// -----------------------------------------------------------------------------
 const ContactModal = ({
   mode,
   initial,
@@ -64,13 +153,6 @@ const ContactModal = ({
     nameRef.current?.focus();
   }, []);
 
-  const [touched, setTouched] = useState(false);
-
-  const handleChange = (field, value) => {
-    setTouched(true);
-    setForm((prev) => ({ ...prev, [field]: value }));
-  };
-
   const handleSubmit = (e) => {
     e.preventDefault();
     onSave({
@@ -79,14 +161,6 @@ const ContactModal = ({
       notes: form.notes.trim(),
     });
   };
-
-  const nameError =
-    touched && !form.name.trim() ? "Name is required" : undefined;
-  const phoneError =
-    touched && !form.phone.trim() ? "Phone is required" : undefined;
-
-  const disabled =
-    loading || !form.name.trim() || !form.phone.trim();
 
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center">
@@ -105,53 +179,28 @@ const ContactModal = ({
         </div>
 
         <form onSubmit={handleSubmit} className="px-6 py-4 space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Full name
-            </label>
-            <input
-              ref={nameRef}
-              className={`w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none ${
-                nameError ? "border-red-400" : ""
-              }`}
-              placeholder="Contact name"
-              value={form.name}
-              onChange={(e) => handleChange("name", e.target.value)}
-            />
-            {nameError && (
-              <p className="text-xs text-red-500 mt-1">{nameError}</p>
-            )}
-          </div>
+          <input
+            ref={nameRef}
+            className="w-full px-3 py-2 border rounded-lg bg-gray-50"
+            placeholder="Name"
+            value={form.name}
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Phone number
-            </label>
-            <input
-              className={`w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none ${
-                phoneError ? "border-red-400" : ""
-              }`}
-              placeholder="+2010..."
-              value={form.phone}
-              onChange={(e) => handleChange("phone", e.target.value)}
-            />
-            {phoneError && (
-              <p className="text-xs text-red-500 mt-1">{phoneError}</p>
-            )}
-          </div>
+          <input
+            className="w-full px-3 py-2 border rounded-lg bg-gray-50"
+            placeholder="Phone"
+            value={form.phone}
+            onChange={(e) => setForm({ ...form, phone: e.target.value })}
+          />
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
-              Notes <span className="text-gray-400 text-xs">(optional)</span>
-            </label>
-            <textarea
-              className="w-full px-3 py-2 border rounded-lg bg-gray-50 focus:ring-2 focus:ring-green-500 focus:outline-none resize-none"
-              placeholder="VIP customer, prefers voice notes, etc."
-              rows={3}
-              value={form.notes}
-              onChange={(e) => handleChange("notes", e.target.value)}
-            />
-          </div>
+          <textarea
+            className="w-full px-3 py-2 border rounded-lg bg-gray-50 resize-none"
+            rows={3}
+            placeholder="Notes"
+            value={form.notes}
+            onChange={(e) => setForm({ ...form, notes: e.target.value })}
+          />
 
           {errorMessage && (
             <div className="text-sm text-red-500">{errorMessage}</div>
@@ -161,22 +210,15 @@ const ContactModal = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 border rounded-lg bg-gray-50 hover:bg-gray-100 text-sm"
-              disabled={loading}
+              className="px-4 py-2 bg-gray-100 rounded-lg text-sm hover:bg-gray-200"
             >
               Cancel
             </button>
             <button
               type="submit"
-              disabled={disabled}
-              className={`px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                disabled
-                  ? "bg-green-300 cursor-not-allowed text-white"
-                  : "bg-green-600 hover:bg-green-700 text-white"
-              }`}
+              className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm hover:bg-green-700"
             >
-              {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-              {mode === "edit" ? "Save changes" : "Save contact"}
+              {loading ? "Saving…" : mode === "edit" ? "Save" : "Create"}
             </button>
           </div>
         </form>
@@ -185,261 +227,209 @@ const ContactModal = ({
   );
 };
 
-// ----- Main View -----
-const ContactsView = ({ onSelectContact }) => {
+// -----------------------------------------------------------------------------
+// MAIN CONTACTS VIEW
+// -----------------------------------------------------------------------------
+export default function ContactsView({ onSelectContact }) {
   const searchRef = useRef(null);
 
   const [contacts, setContacts] = useState([]);
-  const [sort, setSort] = useState("recent"); // "recent" | "az"
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState("recent");
   const [loading, setLoading] = useState(true);
-  const [loadingAction, setLoadingAction] = useState(false);
-  const [error, setError] = useState("");
-  const [modalError, setModalError] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState("create");
   const [editingContact, setEditingContact] = useState(null);
 
+  const [details, setDetails] = useState(null);
+
+  // LOAD CONTACTS
   useEffect(() => {
+    loadContacts();
     searchRef.current?.focus();
   }, []);
 
   const loadContacts = async () => {
-    try {
-      setLoading(true);
-      const data = await getContacts();
-      setContacts(data);
-    } catch (err) {
-      setError("Failed to load contacts.");
-    } finally {
-      setLoading(false);
-    }
+    setLoading(true);
+    const data = await getContacts();
+    setContacts(data);
+    setLoading(false);
   };
 
-  useEffect(() => {
-    loadContacts();
-  }, []);
-
+  // SORTING
   const sortedContacts = useMemo(() => {
     let list = [...contacts];
 
     if (sort === "az") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
-    } else {
-      list.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      return list.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    return list;
+    return list.sort(
+      (a, b) => new Date(b.createdAt) - new Date(a.createdAt)
+    );
   }, [contacts, sort]);
 
+  // SEARCH
   const filteredContacts = useMemo(() => {
     if (!query.trim()) return sortedContacts;
 
     const q = query.toLowerCase();
     return sortedContacts.filter(
       (c) =>
-        c.name?.toLowerCase().includes(q) ||
-        c.phone?.toLowerCase().includes(q)
+        c.name.toLowerCase().includes(q) ||
+        c.phone.toLowerCase().includes(q)
     );
   }, [sortedContacts, query]);
 
-  const openCreateModal = () => {
-    setModalMode("create");
+  // HANDLERS
+  const handleSave = async (payload) => {
+    if (!editingContact) {
+      const c = await createContact(payload);
+      setContacts((prev) => [c, ...prev]);
+    } else {
+      const updated = await updateContact(editingContact._id, payload);
+      setContacts((prev) =>
+        prev.map((c) => (c._id === updated._id ? updated : c))
+      );
+    }
+
+    setShowModal(false);
     setEditingContact(null);
-    setModalError("");
-    setShowModal(true);
   };
 
-  const openEditModal = (contact) => {
-    setModalMode("edit");
-    setEditingContact(contact);
-    setModalError("");
-    setShowModal(true);
-  };
-
-  const handleSaveContact = async (payload) => {
-    try {
-      setLoadingAction(true);
-
-      if (modalMode === "create") {
-        const c = await createContact(payload);
-        setContacts((prev) => [c, ...prev]);
-      } else {
-        const updated = await updateContact(editingContact._id, payload);
-        setContacts((prev) =>
-          prev.map((c) => (c._id === updated._id ? updated : c))
-        );
-      }
-
-      setShowModal(false);
-      setEditingContact(null);
-    } catch (err) {
-      setModalError("Failed to save contact.");
-    } finally {
-      setLoadingAction(false);
-    }
-  };
-
-  const handleDeleteContact = async (id) => {
+  const handleDelete = async (id) => {
     if (!window.confirm("Delete this contact?")) return;
-
-    try {
-      setLoadingAction(true);
-      await deleteContact(id);
-      setContacts((prev) => prev.filter((c) => c._id !== id));
-    } finally {
-      setLoadingAction(false);
-    }
+    await deleteContact(id);
+    setContacts((prev) => prev.filter((c) => c._id !== id));
+    setDetails(null);
   };
 
-  const handleCopy = (phone) => {
-    navigator.clipboard.writeText(phone);
-  };
-
+  // ---------------------------------------------------------------------------
+  // RENDER
+  // ---------------------------------------------------------------------------
   return (
-    <div className="flex flex-col h-full bg-gray-50">
+    <div className="relative flex flex-col h-full bg-gray-50">
       {/* HEADER */}
       <div className="px-6 py-4 bg-white border-b flex items-center justify-between sticky top-0 z-20">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
-          <p className="text-xs text-gray-500">
-            Manage saved customers and quickly jump into chats.
-          </p>
-        </div>
+        <h2 className="text-xl font-semibold text-gray-900">Contacts</h2>
 
         <button
-          onClick={openCreateModal}
-          className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition shadow-sm text-sm"
+          onClick={() => {
+            setEditingContact(null);
+            setShowModal(true);
+          }}
+          className="hidden md:flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
         >
           <UserPlus className="w-4 h-4" />
-          New
+          Add
         </button>
       </div>
 
       {/* SEARCH + SORT */}
-      <div className="px-6 pt-4 flex items-center gap-4">
+      <div className="flex items-center gap-3 px-6 py-3">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
           <input
             ref={searchRef}
             type="text"
             placeholder="Search contacts…"
-            className="w-full pl-10 pr-4 py-2 rounded-lg bg-white border border-gray-200 shadow-sm focus:ring-2 focus:ring-green-500 focus:outline-none text-sm"
+            className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white shadow-sm focus:ring-2 focus:ring-green-500"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
           />
         </div>
 
-        <div className="relative">
-          <select
-            className="px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-          >
-            <option value="recent">Newest</option>
-            <option value="az">A → Z</option>
-          </select>
-        </div>
+        <button
+          className="p-2 bg-white border rounded-lg hover:bg-gray-100"
+          onClick={() => setSort(sort === "recent" ? "az" : "recent")}
+        >
+          {sort === "recent" ? (
+            <ArrowDownWideNarrow className="w-4 h-4" />
+          ) : (
+            <ArrowUpWideNarrow className="w-4 h-4" />
+          )}
+        </button>
       </div>
 
-      {/* CONTENT */}
-      <div className="flex justify-center w-full flex-1 px-4">
-        <div className="w-full max-w-2xl py-4 flex flex-col h-full">
+      {/* CONTACT LIST */}
+      <div className="px-4 pb-4 overflow-y-auto flex-1">
+        {loading ? (
+          <div className="flex justify-center py-20">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+          </div>
+        ) : filteredContacts.length === 0 ? (
+          <div className="text-center text-gray-500 py-20">
+            <Users className="w-10 h-10 mx-auto mb-3 text-gray-300" />
+            <p className="text-sm">No contacts found</p>
+            <button
+              onClick={() => {
+                setEditingContact(null);
+                setShowModal(true);
+              }}
+              className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm"
+            >
+              Add your first contact
+            </button>
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {filteredContacts.map((c) => (
+              <div
+                key={c._id}
+                className="bg-white border rounded-lg px-4 py-3 flex items-center gap-3 shadow-sm hover:shadow-md transition cursor-pointer"
+                onClick={() => setDetails(c)}
+              >
+                <Avatar name={c.name} />
 
-          {loading && (
-            <div className="flex flex-1 items-center justify-center py-12 text-gray-400">
-              <Loader2 className="w-6 h-6 animate-spin" />
-            </div>
-          )}
-
-          {!loading && filteredContacts.length === 0 && (
-            <div className="flex flex-1 flex-col items-center justify-center text-gray-400 py-16">
-              <Users className="w-10 h-10 text-gray-300 mb-3" />
-              <p className="text-sm font-medium">No contacts found</p>
-            </div>
-          )}
-
-          {!loading && filteredContacts.length > 0 && (
-            <div className="space-y-2 overflow-y-auto pb-4">
-              {filteredContacts.map((c) => (
-                <div
-                  key={c._id}
-                  className="bg-white rounded-xl shadow-sm px-4 py-3 flex items-center gap-3 border border-gray-200 hover:shadow-md transition group"
-                >
-                  <Avatar name={c.name} />
-
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-gray-900 text-sm truncate">
-                      {c.name}
-                    </div>
-                    <div className="text-xs text-gray-600">{c.phone}</div>
-                    {c.notes && (
-                      <div className="text-[11px] text-gray-400 line-clamp-1">
-                        {c.notes}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
-                    <button
-                      className="p-1 hover:bg-green-50 rounded-full"
-                      title="Start chat"
-                      onClick={() => onSelectContact(c)}
-                    >
-                      <MessageCircle className="w-4 h-4 text-green-600" />
-                    </button>
-
-                    <button
-                      className="p-1 hover:bg-gray-100 rounded-full"
-                      title="Copy number"
-                      onClick={() => handleCopy(c.phone)}
-                    >
-                      <Copy className="w-4 h-4 text-gray-500" />
-                    </button>
-
-                    <button
-                      className="p-1 hover:bg-gray-100 rounded-full"
-                      onClick={() => openEditModal(c)}
-                      title="Edit"
-                    >
-                      <Pencil className="w-4 h-4 text-gray-500" />
-                    </button>
-
-                    <button
-                      className="p-1 hover:bg-red-50 rounded-full"
-                      onClick={() => handleDeleteContact(c._id)}
-                      disabled={loadingAction}
-                      title="Delete"
-                    >
-                      <Trash2 className="w-4 h-4 text-red-500" />
-                    </button>
-                  </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-gray-900 truncate">
+                    {c.name}
+                  </p>
+                  <p className="text-xs text-gray-600">{c.phone}</p>
                 </div>
-              ))}
-            </div>
-          )}
-        </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
+
+      {/* FLOATING ADD BUTTON (mobile-like) */}
+      <button
+        onClick={() => {
+          setEditingContact(null);
+          setShowModal(true);
+        }}
+        className="md:hidden fixed bottom-6 right-6 w-14 h-14 bg-green-600 text-white rounded-full shadow-xl flex items-center justify-center hover:bg-green-700"
+      >
+        <UserPlus className="w-6 h-6" />
+      </button>
 
       {/* MODAL */}
       {showModal && (
         <ContactModal
-          mode={modalMode}
+          mode={editingContact ? "edit" : "create"}
           initial={editingContact}
+          onSave={handleSave}
           onClose={() => {
-            if (!loadingAction) {
-              setShowModal(false);
-              setEditingContact(null);
-            }
+            setShowModal(false);
+            setEditingContact(null);
           }}
-          onSave={handleSaveContact}
-          loading={loadingAction}
-          errorMessage={modalError}
+        />
+      )}
+
+      {/* DETAILS PANEL */}
+      {details && (
+        <ContactDetails
+          contact={details}
+          onClose={() => setDetails(null)}
+          onEdit={(c) => {
+            setEditingContact(c);
+            setShowModal(true);
+          }}
+          onDelete={handleDelete}
+          onStartChat={onSelectContact}
         />
       )}
     </div>
   );
-};
-
-export default ContactsView;
+}
