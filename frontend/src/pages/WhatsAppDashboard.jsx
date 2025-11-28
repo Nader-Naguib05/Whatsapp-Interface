@@ -21,6 +21,10 @@ import EmojiPicker from "emoji-picker-react";
 
 const PAGE_SIZE = 40;
 
+// Normalize phone so +2010..., 010..., spaces, etc. all resolve to same key
+const normalizePhone = (phone) =>
+  (phone || "").toString().replace(/\D/g, "");
+
 const initialState = {
   conversations: [],
   messagesByConv: {}, // { [convId]: Message[] }
@@ -223,11 +227,11 @@ const WhatsAppDashboard = () => {
   const fileInputRef = useRef(null);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
 
-  // NEW: contacts state + map
+  // contacts state + map
   const [contacts, setContacts] = useState([]);
   const [contactsMap, setContactsMap] = useState({});
 
-  // NEW: conversation search, typing, presence, global unread, notifications
+  // conversation search, typing, presence, global unread, notifications
   const [conversationSearch, setConversationSearch] = useState("");
   const [isCustomerTyping, setIsCustomerTyping] = useState(false);
   const [typingConversationId, setTypingConversationId] = useState(null);
@@ -253,9 +257,10 @@ const WhatsAppDashboard = () => {
     ) || null;
 
   const activePhone = activeConversation?.phone;
+  const activePhoneKey = normalizePhone(activePhone);
   const activeContact =
-    activePhone && contactsMap[String(activePhone)]
-      ? contactsMap[String(activePhone)]
+    activePhoneKey && contactsMap[activePhoneKey]
+      ? contactsMap[activePhoneKey]
       : null;
 
   const activeMessages = messagesByConv[activeConversationId] || [];
@@ -324,26 +329,32 @@ const WhatsAppDashboard = () => {
     }
   }, [globalUnread]);
 
-  // --- load contacts once for mapping ---
-  useEffect(() => {
-    const loadContacts = async () => {
-      try {
-        const res = await fetch(`${BACKEND}/contacts`);
-        if (!res.ok) throw new Error("Failed to fetch contacts");
-        const data = await res.json();
-        setContacts(data || []);
-        const map = {};
-        (data || []).forEach((c) => {
-          if (c.phone) {
-            map[String(c.phone)] = c;
+  // --- reusable load contacts (initial + after changes) ---
+  const loadContacts = async () => {
+    try {
+      const res = await fetch(`${BACKEND}/contacts`);
+      if (!res.ok) throw new Error("Failed to fetch contacts");
+      const data = await res.json();
+      setContacts(data || []);
+      const map = {};
+      (data || []).forEach((c) => {
+        if (c.phone) {
+          const key = normalizePhone(c.phone);
+          if (key) {
+            map[key] = c;
           }
-        });
-        setContactsMap(map);
-      } catch (err) {
-        console.error("Failed to load contacts:", err);
-      }
-    };
+        }
+      });
+      setContactsMap(map);
+    } catch (err) {
+      console.error("Failed to load contacts:", err);
+    }
+  };
+
+  // load contacts once on mount
+  useEffect(() => {
     loadContacts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // --- socket setup ---
@@ -486,9 +497,7 @@ const WhatsAppDashboard = () => {
 
       const isActive = String(activeConversationId) === convId;
       const computedUnread =
-        conversation.unreadCount ??
-        conversation.unread ??
-        1;
+        conversation.unreadCount ?? conversation.unread ?? 1;
 
       dispatch({
         type: "UPSERT_CONVERSATION_TOP",
@@ -738,10 +747,8 @@ const WhatsAppDashboard = () => {
 
   const filteredConversations = useMemo(() => {
     const withContactNames = (conversations || []).map((c) => {
-      const contact =
-        c.phone && contactsMap[String(c.phone)]
-          ? contactsMap[String(c.phone)]
-          : null;
+      const key = normalizePhone(c.phone);
+      const contact = key && contactsMap[key] ? contactsMap[key] : null;
       if (!contact) return c;
       return { ...c, name: contact.name };
     });
@@ -1063,9 +1070,42 @@ const WhatsAppDashboard = () => {
     setShowEmojiPicker(false);
   };
 
-  const handleAddToContacts = (payload) => {
-    console.log("Add to contacts clicked:", payload);
-    setActiveTab("contacts");
+  // Add to contacts directly from chat header menu
+  const handleAddToContacts = async (payload) => {
+    if (!payload && !activeConversation) return;
+
+    const rawPhone = payload?.phone || activePhone;
+    const rawName =
+      payload?.name ||
+      activeContact?.name ||
+      activeConversation?.name ||
+      rawPhone;
+
+    const phone = (rawPhone || "").toString().trim();
+    const name = (rawName || "").toString().trim();
+
+    if (!phone) {
+      console.warn("Cannot add to contacts – missing phone", payload);
+      return;
+    }
+
+    try {
+      await fetch(`${BACKEND}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone,
+          name: name || phone,
+          notes: "",
+        }),
+      });
+
+      // Refresh contacts & mapping so header + list immediately show the saved name
+      await loadContacts();
+    } catch (err) {
+      console.error("Failed to create contact from chat:", err);
+      // Even if it fails, we stay in chat and don't break anything.
+    }
   };
 
   return (
@@ -1147,7 +1187,9 @@ const WhatsAppDashboard = () => {
               }
 
               const existing = conversations.find(
-                (c) => String(c.phone) === String(contact.phone)
+                (c) =>
+                  normalizePhone(c.phone) ===
+                  normalizePhone(contact.phone)
               );
 
               if (!existing) {
@@ -1194,7 +1236,10 @@ const WhatsAppDashboard = () => {
               const map = {};
               (list || []).forEach((c) => {
                 if (c.phone) {
-                  map[String(c.phone)] = c;
+                  const key = normalizePhone(c.phone);
+                  if (key) {
+                    map[key] = c;
+                  }
                 }
               });
               setContactsMap(map);
