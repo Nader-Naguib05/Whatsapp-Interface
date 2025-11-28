@@ -91,8 +91,16 @@ const AnalyticsView = () => {
         fetchAnalytics();
     }, []);
 
-    if (loading) return <LoadingState />;
-  
+    if (loading) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-slate-50">
+                <div className="flex flex-col items-center gap-3 text-gray-500">
+                    <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
+                    <p className="text-sm">Loading analytics…</p>
+                </div>
+            </div>
+        );
+    }
 
     if (error) return <ErrorState message={error} onRetry={fetchAnalytics} />;
 
@@ -140,7 +148,7 @@ const AnalyticsView = () => {
     // --------------------------------------------------------------------
 
     return (
-        <div className="min-h-screen h-full overflow-y-auto bg-slate-50 flex items-center justify-center">
+        <div className="h-full overflow-y-auto bg-slate-50">
             <div className="max-w-6xl mx-auto px-4 py-6 lg:py-8">
                 {/* Top header */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
