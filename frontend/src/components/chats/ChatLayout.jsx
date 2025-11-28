@@ -36,11 +36,7 @@ function formatDayLabel(ts) {
         today.getMonth(),
         today.getDate()
     );
-    const msgMidnight = new Date(
-        d.getFullYear(),
-        d.getMonth(),
-        d.getDate()
-    );
+    const msgMidnight = new Date(d.getFullYear(), d.getMonth(), d.getDate());
 
     const diffDays =
         (todayMidnight.getTime() - msgMidnight.getTime()) /
@@ -61,8 +57,7 @@ function getMessageKey(msg, idx) {
 --------------------------------------------------- */
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
-    const timestamp =
-        msg.timestamp || msg.time || msg.createdAt || msg.sentAt;
+    const timestamp = msg.timestamp || msg.time || msg.createdAt || msg.sentAt;
 
     const mediaType = msg.mediaType || "";
     const mediaUrl = msg.mediaUrl || null;
@@ -76,8 +71,7 @@ function MessageBubble({ msg, onRetryMessage }) {
         msg.from === "business" ||
         msg.fromMe === true;
 
-    const isSending =
-        status === "sending" || status.startsWith("uploading-");
+    const isSending = status === "sending" || status.startsWith("uploading-");
     const isFailed = status === "failed";
 
     const isImage = mediaType === "image" || mediaType.startsWith("image/");
@@ -185,9 +179,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                             )}
 
                             {status === "sent" && <Check size={14} />}
-                            {status === "delivered" && (
-                                <CheckCheck size={14} />
-                            )}
+                            {status === "delivered" && <CheckCheck size={14} />}
                             {status === "read" && (
                                 <CheckCheck
                                     size={14}
@@ -245,6 +237,7 @@ const ChatLayout = ({
     isInContacts = false,
 
     onAddToContacts,
+    onOpenContactDetails,
 }) => {
     const messagesRef = useRef(null);
     const bottomRef = useRef(null);
@@ -294,8 +287,7 @@ const ChatLayout = ({
         let currentDay = null;
 
         messages.forEach((msg, idx) => {
-            const ts =
-                msg.timestamp || msg.time || msg.createdAt;
+            const ts = msg.timestamp || msg.time || msg.createdAt;
             const dayLabel = formatDayLabel(ts);
 
             const baseId = getMessageKey(msg, idx);
@@ -363,9 +355,7 @@ const ChatLayout = ({
     --------------------------------------------------- */
     const activeConversation =
         conversations.find(
-            (c) =>
-                String(c._id || c.id) ===
-                String(activeConversationId)
+            (c) => String(c._id || c.id) === String(activeConversationId)
         ) || null;
 
     const statusBadge =
@@ -422,13 +412,9 @@ const ChatLayout = ({
                                         ? " wa-conversation-item--active"
                                         : "")
                                 }
-                                onClick={() =>
-                                    onSelectConversation(convId)
-                                }
+                                onClick={() => onSelectConversation(convId)}
                             >
-                                <div className="wa-avatar">
-                                    {name[0]}
-                                </div>
+                                <div className="wa-avatar">{name[0]}</div>
 
                                 <div className="wa-conversation-main">
                                     <div className="wa-conversation-top-row">
@@ -446,9 +432,7 @@ const ChatLayout = ({
                                         </span>
                                         {unread > 0 && (
                                             <span className="wa-unread-badge">
-                                                {unread > 99
-                                                    ? "99+"
-                                                    : unread}
+                                                {unread > 99 ? "99+" : unread}
                                             </span>
                                         )}
                                     </div>
@@ -472,8 +456,7 @@ const ChatLayout = ({
                                 </div>
                                 <div>
                                     <div className="wa-chat-title">
-                                        {contactName ||
-                                            activeConversation.name}
+                                        {contactName || activeConversation.name}
                                     </div>
                                     <div className="wa-chat-subtitle">
                                         {contactPhone}
@@ -487,30 +470,51 @@ const ChatLayout = ({
                             </div>
 
                             <div className="wa-chat-header-actions">
-                                <button className="wa-icon-button">
-                                    <Phone size={18} />
-                                </button>
-
-                                <div className="wa-header-menu-wrapper">
+                                {/* 3 DOTS MENU */}
+                                <div
+                                    className="wa-header-menu-wrapper"
+                                    style={{ position: "relative" }}
+                                >
                                     <button
                                         type="button"
                                         className="wa-icon-button"
                                         onClick={() =>
-                                            setIsHeaderMenuOpen(
-                                                (o) => !o
-                                            )
+                                            setIsHeaderMenuOpen((o) => !o)
                                         }
                                     >
                                         <MoreVertical size={18} />
                                     </button>
 
                                     {isHeaderMenuOpen && (
-                                        <div className="wa-header-menu">
+                                        <div
+                                            className="wa-header-menu"
+                                            style={{
+                                                position: "absolute",
+                                                top: "110%",
+                                                right: 0,
+                                                background: "white",
+                                                borderRadius: "8px",
+                                                padding: "6px 0",
+                                                boxShadow:
+                                                    "0 4px 12px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)",
+                                                zIndex: 50,
+                                                minWidth: "160px",
+                                            }}
+                                        >
+                                            {/* ADD TO CONTACTS */}
                                             {!isInContacts && (
                                                 <button
                                                     className="wa-header-menu-item"
+                                                    style={{
+                                                        width: "100%",
+                                                        textAlign: "left",
+                                                        padding: "8px 14px",
+                                                        fontSize: "13px",
+                                                    }}
                                                     onClick={() => {
-                                                        setIsHeaderMenuOpen(false);
+                                                        setIsHeaderMenuOpen(
+                                                            false
+                                                        );
                                                         onAddToContacts?.({
                                                             id: activeConversationId,
                                                             name:
@@ -525,6 +529,47 @@ const ChatLayout = ({
                                                     Add to contacts
                                                 </button>
                                             )}
+
+                                            {/* VIEW CONTACT DETAILS */}
+                                            {isInContacts && (
+                                                <button
+                                                    className="wa-header-menu-item"
+                                                    style={{
+                                                        width: "100%",
+                                                        textAlign: "left",
+                                                        padding: "8px 14px",
+                                                        fontSize: "13px",
+                                                    }}
+                                                    onClick={() => {
+                                                        setIsHeaderMenuOpen(
+                                                            false
+                                                        );
+                                                        onOpenContactDetails?.();
+                                                    }}
+                                                >
+                                                    View contact
+                                                </button>
+                                            )}
+
+                                            {/* COPY PHONE NUMBER */}
+                                            <button
+                                                className="wa-header-menu-item"
+                                                style={{
+                                                    width: "100%",
+                                                    textAlign: "left",
+                                                    padding: "8px 14px",
+                                                    fontSize: "13px",
+                                                }}
+                                                onClick={() => {
+                                                    setIsHeaderMenuOpen(false);
+                                                    navigator.clipboard.writeText(
+                                                        contactPhone ||
+                                                            activeConversation.phone
+                                                    );
+                                                }}
+                                            >
+                                                Copy number
+                                            </button>
                                         </div>
                                     )}
                                 </div>
