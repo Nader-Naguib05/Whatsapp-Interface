@@ -1,6 +1,7 @@
-// src/components/analytics/AnalyticsView.jsx
 import React, { useEffect, useState } from "react";
 import StatCard from "../ui/StatCard";
+
+// ---- helpers ---------------------------------------------------------
 
 const numberFormatter = new Intl.NumberFormat();
 
@@ -14,12 +15,8 @@ function formatDuration(seconds) {
   return `${hours.toFixed(1)} h`;
 }
 
-const SkeletonBar = () => (
-  <div className="animate-pulse w-full h-2 rounded-full bg-gray-200" />
-);
-
 const LoadingState = () => (
-  <div className="p-6 h-full flex items-center justify-center">
+  <div className="h-full flex items-center justify-center">
     <div className="flex flex-col items-center gap-3 text-gray-500">
       <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
       <p className="text-sm">Loading analytics…</p>
@@ -28,18 +25,18 @@ const LoadingState = () => (
 );
 
 const ErrorState = ({ message, onRetry }) => (
-  <div className="p-6 h-full flex items-center justify-center">
-    <div className="max-w-md w-full text-center bg-red-50 border border-red-100 rounded-xl p-6">
+  <div className="h-full flex items-center justify-center px-4">
+    <div className="max-w-md w-full text-center bg-red-50 border border-red-100 rounded-2xl p-6">
       <h3 className="text-sm font-semibold text-red-700 mb-2">
-        Something went wrong
+        Couldn&apos;t load analytics
       </h3>
       <p className="text-xs text-red-600 mb-4">
-        {message || "Failed to load analytics data."}
+        {message || "Something went wrong while fetching the data."}
       </p>
       {onRetry && (
         <button
           onClick={onRetry}
-          className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-md bg-red-600 text-white hover:bg-red-700 transition-colors"
+          className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
         >
           Try again
         </button>
@@ -49,18 +46,20 @@ const ErrorState = ({ message, onRetry }) => (
 );
 
 const EmptyState = () => (
-  <div className="p-6 h-full flex items-center justify-center">
-    <div className="max-w-md w-full text-center bg-white border border-dashed border-gray-200 rounded-xl p-6">
-      <h3 className="text-sm font-semibold text-gray-800 mb-1">
+  <div className="h-full flex items-center justify-center px-4">
+    <div className="max-w-md w-full text-center bg-white border border-dashed border-gray-300 rounded-2xl p-6">
+      <h3 className="text-sm font-semibold text-gray-900 mb-1">
         No activity yet
       </h3>
       <p className="text-xs text-gray-500">
-        Once you start chatting with customers and sending broadcasts,
-        you&apos;ll see live analytics here.
+        As conversations and broadcasts start coming in, this page will show
+        live performance analytics.
       </p>
     </div>
   </div>
 );
+
+// ---- main view -------------------------------------------------------
 
 const AnalyticsView = () => {
   const [payload, setPayload] = useState(null);
@@ -72,10 +71,8 @@ const AnalyticsView = () => {
       setLoading(true);
       setError("");
 
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/analytics/dashboard`);
-      if (!res.ok) {
-        throw new Error(`Request failed with status ${res.status}`);
-      }
+      const res = await fetch("/api/analytics/dashboard");
+      if (!res.ok) throw new Error(`Request failed with status ${res.status}`);
 
       const data = await res.json();
       setPayload(data);
@@ -103,7 +100,7 @@ const AnalyticsView = () => {
     return <EmptyState />;
   }
 
-  const { overview, messages, broadcast, responseTime } = payload;
+  const { overview, messages, broadcast, responseTime, meta } = payload;
   const stats = overview.stats || [];
   const messageVolume = messages.messageVolume || [];
   const maxVolume = messages.maxVolume || 0;
@@ -117,344 +114,475 @@ const AnalyticsView = () => {
 
   const responseSample = responseTime?.sampleSize || 0;
 
+  // ---- lightweight "insights" (pure frontend, no backend changes) ----
+
+  const busiestDay =
+    messageVolume.length > 0
+      ? messageVolume.reduce(
+          (best, d) => (d.total > (best?.total ?? -1) ? d : best),
+          null
+        )
+      : null;
+
+  const avgDailyMessages =
+    messageVolume.length > 0 ? totalMessages / messageVolume.length : 0;
+
+  const agentShare =
+    totalMessages > 0 ? (agentMessages / totalMessages) * 100 : 0;
+  const customerShare =
+    totalMessages > 0 ? (customerMessages / totalMessages) * 100 : 0;
+
+  // --------------------------------------------------------------------
+
   return (
-    <div className="p-6 bg-gray-50 h-full overflow-y-auto">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            Analytics &amp; Reports
-          </h2>
-          <p className="text-xs text-gray-500 mt-1">
-            Conversation performance, broadcast impact, and response-time
-            health in a single view.
-          </p>
-        </div>
-
-        <div className="flex items-center gap-2 text-xs text-gray-500">
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-white border border-gray-200">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Live
-          </span>
-          {payload.meta?.generatedAt && (
-            <span>
-              Updated at{" "}
-              {new Date(payload.meta.generatedAt).toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              })}
-            </span>
-          )}
-        </div>
-      </div>
-
-      {/* Top Stat Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {stats.map((stat, idx) => (
-          <StatCard key={idx} {...stat} />
-        ))}
-      </div>
-
-      {/* Message volume + response times */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Message Volume */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900 text-sm">
-              Message Volume (Last 7 Days)
-            </h3>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-              Total: {numberFormatter.format(totalMessages)}
-            </span>
+    <div className="h-full overflow-y-auto bg-slate-50">
+      <div className="max-w-6xl mx-auto px-4 py-6 lg:py-8">
+        {/* Top header */}
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
+          <div>
+            <h1 className="text-[22px] md:text-2xl font-semibold text-slate-900 tracking-tight">
+              Analytics &amp; Reports
+            </h1>
+            <p className="mt-1 text-xs text-slate-500 max-w-xl">
+              Monitor conversation performance, broadcast impact, and
+              response-time health for your WhatsApp workspace.
+            </p>
           </div>
 
-          {messageVolume.length === 0 ? (
-            <p className="text-xs text-gray-400">
-              No messages sent in the last 7 days.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {messageVolume.map((d) => {
-                const percentage = maxVolume
-                  ? Math.max(5, (d.total / maxVolume) * 100)
-                  : 0;
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              Live
+            </span>
+            {meta?.generatedAt && (
+              <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
+                Updated at{" "}
+                {new Date(meta.generatedAt).toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
+              Last {meta?.window?.volumeLastNDays ?? 7} days of activity
+            </span>
+          </div>
+        </div>
 
-                const agentRatio =
-                  d.total > 0 ? (d.agent / d.total) * 100 : 0;
-                const customerRatio =
-                  d.total > 0 ? (d.customer / d.total) * 100 : 0;
+        {/* Stat cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          {stats.map((stat, idx) => (
+            <div
+              key={idx}
+              className="transform transition-transform duration-150 ease-out hover:-translate-y-0.5"
+            >
+              <StatCard {...stat} />
+            </div>
+          ))}
+        </div>
 
-                return (
-                  <div key={d.date}>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="text-gray-600 font-medium">
-                        {d.label}
-                      </span>
-                      <span className="font-semibold text-gray-900">
-                        {d.total}
-                      </span>
-                    </div>
+        {/* Main grid: volume + response */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {/* Message Volume */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Message Volume (Last {meta?.window?.volumeLastNDays ?? 7}{" "}
+                  Days)
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Daily inbound and outbound messages across all conversations.
+                </p>
+              </div>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
+                Total: {numberFormatter.format(totalMessages)}
+              </span>
+            </div>
 
-                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-2 rounded-full bg-emerald-500 transition-all"
-                        style={{ width: `${percentage}%` }}
-                      >
-                        {/* layered bar: agent vs customer */}
-                        {d.total > 0 && (
-                          <div className="flex h-full w-full">
-                            <div
-                              className="h-full"
-                              style={{
-                                width: `${agentRatio}%`,
-                                background:
-                                  "rgba(34, 197, 94, 1)", // emerald-500
-                              }}
-                            />
-                            <div
-                              className="h-full"
-                              style={{
-                                width: `${customerRatio}%`,
-                                background:
-                                  "rgba(59, 130, 246, 1)", // blue-500
-                              }}
-                            />
-                          </div>
-                        )}
+            {messageVolume.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                No messages were sent in the selected window.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {messageVolume.map((d) => {
+                  const percentage = maxVolume
+                    ? Math.max(5, (d.total / maxVolume) * 100)
+                    : 0;
+
+                  const agentRatio =
+                    d.total > 0 ? (d.agent / d.total) * 100 : 0;
+                  const customerRatio =
+                    d.total > 0 ? (d.customer / d.total) * 100 : 0;
+
+                  return (
+                    <div key={d.date}>
+                      <div className="flex justify-between text-[11px] mb-1">
+                        <span className="font-medium text-slate-700">
+                          {d.label}
+                        </span>
+                        <span className="font-semibold text-slate-900">
+                          {d.total}
+                        </span>
+                      </div>
+
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className="h-2.5 transition-all duration-200 ease-out"
+                          style={{
+                            width: `${percentage}%`,
+                            background: "transparent",
+                          }}
+                        >
+                          {d.total > 0 && (
+                            <div className="flex h-full w-full">
+                              <div
+                                className="h-full"
+                                style={{
+                                  width: `${agentRatio}%`,
+                                  background:
+                                    "linear-gradient(90deg, #22c55e, #16a34a)",
+                                }}
+                              />
+                              <div
+                                className="h-full"
+                                style={{
+                                  width: `${customerRatio}%`,
+                                  background:
+                                    "linear-gradient(90deg, #3b82f6, #2563eb)",
+                                }}
+                              />
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Legend */}
+            <div className="flex items-center gap-4 mt-4 text-[11px] text-slate-500">
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                <span>Agent messages</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                <span>Customer messages</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Response Time Performance */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Response Time Performance
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Time between a customer message and the next agent reply.
+                </p>
+              </div>
+              <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
+                Sample: {responseSample} reply pairs
+              </span>
+            </div>
+
+            {responseSample === 0 ? (
+              <p className="text-xs text-slate-400">
+                Not enough recent data to calculate response times.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100/60 border border-emerald-100">
+                  <div>
+                    <p className="text-[11px] font-semibold text-emerald-800">
+                      Average Response
+                    </p>
+                    <p className="text-[10px] text-emerald-700/80">
+                      Typical agent reply time
+                    </p>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                  <span className="text-lg font-bold text-emerald-800">
+                    {formatDuration(responseTime.avgSeconds)}
+                  </span>
+                </div>
 
-          {/* Legend */}
-          <div className="flex items-center gap-4 mt-4 text-[11px] text-gray-500">
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span>Agent messages</span>
-            </div>
-            <div className="flex items-center gap-1">
-              <span className="w-2 h-2 rounded-full bg-blue-500" />
-              <span>Customer messages</span>
-            </div>
+                <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-sky-50 to-sky-100/60 border border-sky-100">
+                  <div>
+                    <p className="text-[11px] font-semibold text-sky-800">
+                      Median Response
+                    </p>
+                    <p className="text-[10px] text-sky-700/80">
+                      Half of replies are faster than this
+                    </p>
+                  </div>
+                  <span className="text-lg font-bold text-sky-800">
+                    {formatDuration(responseTime.medianSeconds)}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-fuchsia-50 to-fuchsia-100/60 border border-fuchsia-100">
+                  <div>
+                    <p className="text-[11px] font-semibold text-fuchsia-800">
+                      P90 Response
+                    </p>
+                    <p className="text-[10px] text-fuchsia-700/80">
+                      90% of replies are under this
+                    </p>
+                  </div>
+                  <span className="text-lg font-bold text-fuchsia-800">
+                    {formatDuration(responseTime.p90Seconds)}
+                  </span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Response Time Performance */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900 text-sm">
-              Response Time Performance
-            </h3>
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-              Sample: {responseSample} reply pairs
-            </span>
-          </div>
-
-          {responseSample === 0 ? (
-            <p className="text-xs text-gray-400">
-              Not enough recent message pairs to compute response times.
-            </p>
-          ) : (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between p-3 bg-emerald-50 rounded-lg">
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-medium text-gray-700">
-                    Average Response
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    Typical agent reply time
-                  </span>
-                </div>
-                <span className="text-lg font-bold text-emerald-700">
-                  {formatDuration(responseTime.avgSeconds)}
-                </span>
+        {/* Bottom grid: broadcasts + split + insights */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+          {/* Broadcast campaigns */}
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5 xl:col-span-2">
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900">
+                  Broadcast Campaigns
+                </h2>
+                <p className="text-[11px] text-slate-500 mt-0.5">
+                  Performance of the most recent campaigns.
+                </p>
               </div>
-
-              <div className="flex items-center justify-between p-3 bg-blue-50 rounded-lg">
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-medium text-gray-700">
-                    Median Response
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    50% of replies are faster than this
-                  </span>
-                </div>
-                <span className="text-lg font-bold text-blue-700">
-                  {formatDuration(responseTime.medianSeconds)}
+              <div className="flex flex-col items-end gap-1 text-[11px] text-slate-500">
+                <span className="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
+                  Batches: {totalBroadcastBatches}
                 </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 bg-purple-50 rounded-lg">
-                <div className="flex flex-col">
-                  <span className="text-[11px] font-medium text-gray-700">
-                    P90 Response
-                  </span>
-                  <span className="text-[10px] text-gray-500">
-                    90% of replies are under this
-                  </span>
-                </div>
-                <span className="text-lg font-bold text-purple-700">
-                  {formatDuration(responseTime.p90Seconds)}
+                <span className="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
+                  Messages: {numberFormatter.format(totalBroadcastMessages)}
                 </span>
               </div>
             </div>
-          )}
-        </div>
-      </div>
 
-      {/* Broadcast performance + message split */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Broadcast Campaigns */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100 lg:col-span-2">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-semibold text-gray-900 text-sm">
-              Broadcast Campaigns
-            </h3>
-            <div className="flex items-center gap-2 text-[11px] text-gray-500">
-              <span className="px-2 py-0.5 rounded-full bg-gray-100">
-                Batches: {totalBroadcastBatches}
-              </span>
-              <span className="px-2 py-0.5 rounded-full bg-gray-100">
-                Messages: {numberFormatter.format(totalBroadcastMessages)}
-              </span>
-            </div>
-          </div>
+            {lastCampaigns.length === 0 ? (
+              <p className="text-xs text-slate-400">
+                No broadcast campaigns have been sent yet.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {lastCampaigns.map((c) => {
+                  const rate = Number.isFinite(c.successRate)
+                    ? c.successRate
+                    : 0;
 
-          {lastCampaigns.length === 0 ? (
-            <p className="text-xs text-gray-400">
-              No broadcast campaigns have been sent yet.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {lastCampaigns.map((c) => {
-                const rate = Number.isFinite(c.successRate)
-                  ? c.successRate
-                  : 0;
-
-                return (
-                  <div
-                    key={c.id}
-                    className="border border-gray-100 rounded-lg p-3 hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center justify-between mb-1.5">
-                      <div className="flex flex-col">
-                        <span className="text-xs font-semibold text-gray-900">
-                          {c.name}
-                        </span>
-                        <span className="text-[10px] text-gray-500">
-                          Template {c.templateName} · {c.language}
+                  return (
+                    <div
+                      key={c.id}
+                      className="border border-slate-200 rounded-xl px-3.5 py-3 bg-slate-50/40 hover:bg-slate-50 transition-colors"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <div className="flex flex-col">
+                          <span className="text-xs font-semibold text-slate-900">
+                            {c.name}
+                          </span>
+                          <span className="text-[10px] text-slate-500">
+                            Template {c.templateName} · {c.language}
+                          </span>
+                        </div>
+                        <span
+                          className={`text-[10px] px-2.5 py-0.5 rounded-full border ${
+                            c.status === "completed"
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-100"
+                              : c.status === "processing"
+                              ? "bg-sky-50 text-sky-700 border-sky-100"
+                              : c.status === "failed"
+                              ? "bg-rose-50 text-rose-700 border-rose-100"
+                              : "bg-slate-50 text-slate-600 border-slate-200"
+                          }`}
+                        >
+                          {c.status}
                         </span>
                       </div>
-                      <span
-                        className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                          c.status === "completed"
-                            ? "bg-emerald-50 text-emerald-700 border-emerald-100"
-                            : c.status === "processing"
-                            ? "bg-blue-50 text-blue-700 border-blue-100"
-                            : c.status === "failed"
-                            ? "bg-red-50 text-red-700 border-red-100"
-                            : "bg-gray-50 text-gray-600 border-gray-100"
-                        }`}
-                      >
-                        {c.status}
-                      </span>
-                    </div>
 
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 mb-1">
-                      <span>
-                        {numberFormatter.format(c.success)} delivered /{" "}
-                        {numberFormatter.format(c.total)} total
-                      </span>
-                      <span className="font-medium text-gray-700">
-                        {rate.toFixed(1)}% success
-                      </span>
-                    </div>
+                      <div className="flex items-center justify-between text-[10px] text-slate-500 mb-1">
+                        <span>
+                          {numberFormatter.format(c.success)} delivered /{" "}
+                          {numberFormatter.format(c.total)} total
+                        </span>
+                        <span className="font-medium text-slate-700">
+                          {rate.toFixed(1)}% success
+                        </span>
+                      </div>
 
-                    <div className="w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                      <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
+                        <div
+                          className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-emerald-400 transition-all duration-200"
+                          style={{
+                            width: `${Math.max(3, Math.min(rate, 100))}%`,
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Message Split + Insights */}
+          <div className="space-y-4">
+            {/* Message split */}
+            <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
+              <h2 className="text-sm font-semibold text-slate-900 mb-3">
+                Message Split
+              </h2>
+
+              {totalMessages === 0 ? (
+                <p className="text-xs text-slate-400">
+                  No messages yet to analyse split.
+                </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs text-slate-500">Total</span>
+                    <span className="text-sm font-semibold text-slate-900">
+                      {numberFormatter.format(totalMessages)}
+                    </span>
+                  </div>
+
+                  <div className="w-full bg-slate-100 rounded-full h-2.5 mb-4 overflow-hidden">
+                    <div className="flex h-full w-full">
                       <div
-                        className="h-2 bg-emerald-500 rounded-full"
+                        className="h-full"
                         style={{
-                          width: `${Math.max(3, Math.min(rate, 100))}%`,
+                          width: `${agentShare}%`,
+                          background:
+                            "linear-gradient(90deg, #22c55e, #16a34a)",
+                        }}
+                      />
+                      <div
+                        className="h-full"
+                        style={{
+                          width: `${customerShare}%`,
+                          background:
+                            "linear-gradient(90deg, #3b82f6, #2563eb)",
                         }}
                       />
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="space-y-2 text-[11px]">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                        <span>Agent messages</span>
+                      </div>
+                      <span className="font-medium text-slate-900">
+                        {numberFormatter.format(agentMessages)} (
+                        {agentShare.toFixed(1)}%)
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-slate-600">
+                        <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
+                        <span>Customer messages</span>
+                      </div>
+                      <span className="font-medium text-slate-900">
+                        {numberFormatter.format(customerMessages)} (
+                        {customerShare.toFixed(1)}%)
+                      </span>
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-          )}
-        </div>
 
-        {/* Message Split */}
-        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-          <h3 className="font-semibold text-gray-900 text-sm mb-4">
-            Message Split
-          </h3>
+            {/* Insights */}
+            <div className="bg-slate-900 rounded-2xl text-slate-50 p-5">
+              <h2 className="text-sm font-semibold mb-2">Insights</h2>
+              <p className="text-[11px] text-slate-300 mb-3">
+                Quick takeaways generated from the current window. These are
+                purely informational and don&apos;t affect any data.
+              </p>
 
-          {totalMessages === 0 ? (
-            <p className="text-xs text-gray-400">
-              No messages yet to analyse split.
-            </p>
-          ) : (
-            <>
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-xs text-gray-500">Total</span>
-                <span className="text-sm font-semibold text-gray-900">
-                  {numberFormatter.format(totalMessages)}
-                </span>
-              </div>
-
-              <div className="w-full bg-gray-100 rounded-full h-2 mb-4 overflow-hidden">
-                {totalMessages > 0 && (
-                  <div className="flex h-full w-full">
-                    <div
-                      className="h-full"
-                      style={{
-                        width: `${(agentMessages / totalMessages) * 100}%`,
-                        background: "rgba(34, 197, 94, 1)", // agent
-                      }}
-                    />
-                    <div
-                      className="h-full"
-                      style={{
-                        width: `${
-                          (customerMessages / totalMessages) * 100
-                        }%`,
-                        background: "rgba(59, 130, 246, 1)", // customer
-                      }}
-                    />
-                  </div>
+              <ul className="space-y-2 text-[11px]">
+                {busiestDay && (
+                  <li className="flex gap-2">
+                    <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0" />
+                    <span>
+                      Your busiest day is{" "}
+                      <span className="font-semibold">
+                        {busiestDay.label}
+                      </span>{" "}
+                      with{" "}
+                      <span className="font-semibold">
+                        {busiestDay.total} messages
+                      </span>
+                      .
+                    </span>
+                  </li>
                 )}
-              </div>
 
-              <div className="space-y-2 text-[11px]">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                    <span>Agent messages</span>
-                  </div>
-                  <span className="font-medium text-gray-900">
-                    {numberFormatter.format(agentMessages)} (
-                    {((agentMessages / totalMessages) * 100).toFixed(1)}%)
-                  </span>
-                </div>
+                {avgDailyMessages > 0 && (
+                  <li className="flex gap-2">
+                    <span className="mt-0.5 w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
+                    <span>
+                      You&apos;re averaging{" "}
+                      <span className="font-semibold">
+                        {avgDailyMessages.toFixed(1)} messages/day
+                      </span>{" "}
+                      in this period.
+                    </span>
+                  </li>
+                )}
 
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-1 text-gray-600">
-                    <span className="w-2 h-2 rounded-full bg-blue-500" />
-                    <span>Customer messages</span>
-                  </div>
-                  <span className="font-medium text-gray-900">
-                    {numberFormatter.format(customerMessages)} (
-                    {((customerMessages / totalMessages) * 100).toFixed(1)}%)
-                  </span>
-                </div>
-              </div>
-            </>
-          )}
+                {responseSample > 0 && responseTime.avgSeconds != null && (
+                  <li className="flex gap-2">
+                    <span className="mt-0.5 w-1 h-1 rounded-full bg-fuchsia-400 flex-shrink-0" />
+                    <span>
+                      Current average response time is{" "}
+                      <span className="font-semibold">
+                        {formatDuration(responseTime.avgSeconds)}
+                      </span>
+                      . Tightening this usually increases customer satisfaction.
+                    </span>
+                  </li>
+                )}
+
+                {totalBroadcastBatches > 0 && (
+                  <li className="flex gap-2">
+                    <span className="mt-0.5 w-1 h-1 rounded-full bg-amber-400 flex-shrink-0" />
+                    <span>
+                      You&apos;ve sent{" "}
+                      <span className="font-semibold">
+                        {totalBroadcastBatches} broadcast campaigns
+                      </span>{" "}
+                      with{" "}
+                      <span className="font-semibold">
+                        {numberFormatter.format(totalBroadcastMessages)}{" "}
+                        messages
+                      </span>{" "}
+                      in total.
+                    </span>
+                  </li>
+                )}
+
+                {!busiestDay &&
+                  avgDailyMessages === 0 &&
+                  responseSample === 0 &&
+                  totalBroadcastBatches === 0 && (
+                    <li className="text-[11px] text-slate-300">
+                      Start talking to customers or send a first broadcast, and
+                      this area will highlight what&apos;s happening.
+                    </li>
+                  )}
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
