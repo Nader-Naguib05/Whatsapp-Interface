@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { cn } from "../../utils/cn";
 
-const API_BASE = "/api/broadcast"; // change to "/broadcast" if your backend is mounted there
+const API_BASE = "/api/broadcast"; // kept for reference if needed
 
 function formatDate(d) {
   if (!d) return "-";
@@ -55,7 +55,7 @@ function statusColor(status) {
 }
 
 const BroadcastView = () => {
-  // Composer state
+  // --------------- Composer state ---------------
   const [templateName, setTemplateName] = useState("");
   const [language, setLanguage] = useState("en_US");
   const [componentsRaw, setComponentsRaw] = useState(""); // JSON string (optional)
@@ -63,11 +63,15 @@ const BroadcastView = () => {
   const [file, setFile] = useState(null);
   const [fileError, setFileError] = useState("");
 
+  // CSV introspection (frontend-only)
+  const [csvHeaders, setCsvHeaders] = useState([]);
+  const [numberColumn, setNumberColumn] = useState("phone_number");
+
   const [isSending, setIsSending] = useState(false);
   const [sendError, setSendError] = useState("");
   const [sendSuccess, setSendSuccess] = useState("");
 
-  // Batches state
+  // --------------- Batches state ---------------
   const [batches, setBatches] = useState([]);
   const [loadingBatches, setLoadingBatches] = useState(false);
   const [batchesError, setBatchesError] = useState("");
@@ -83,7 +87,9 @@ const BroadcastView = () => {
     try {
       setLoadingBatches(true);
       setBatchesError("");
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/broadcast/batches`);
+      const res = await axios.get(
+        `${import.meta.env.VITE_API_URL}/broadcast/batches`
+      );
       setBatches(res.data || []);
     } catch (err) {
       setBatchesError(
@@ -99,7 +105,9 @@ const BroadcastView = () => {
     try {
       setLoadingBatchDetails(true);
       setBatchDetailsError("");
-      const res = await axios.get(`${import.meta.env.VITE_API_URL}/broadcast/batches/${id}`);
+      const res = await axios.get(
+        `${import.meta.env.VITE_API_URL}/broadcast/batches/${id}`
+      );
       setSelectedBatch(res.data || null);
     } catch (err) {
       setBatchDetailsError(
@@ -119,32 +127,65 @@ const BroadcastView = () => {
   useEffect(() => {
     if (selectedBatchId) {
       fetchBatchDetails(selectedBatchId);
+    } else {
+      setSelectedBatch(null);
     }
   }, [selectedBatchId]);
 
   // --------------- HANDLERS ---------------
 
-  const handleFileChange = (e) => {
+  const handleFileChange = async (e) => {
     const f = e.target.files?.[0];
+
     if (!f) {
       setFile(null);
+      setCsvHeaders([]);
+      setNumberColumn("phone_number");
       return;
     }
 
     if (!f.name.toLowerCase().endsWith(".csv")) {
       setFileError("File must be a CSV");
       setFile(null);
+      setCsvHeaders([]);
+      setNumberColumn("phone_number");
       return;
     }
 
     if (f.size > 5 * 1024 * 1024) {
       setFileError("Max file size is 5MB");
       setFile(null);
+      setCsvHeaders([]);
+      setNumberColumn("phone_number");
       return;
     }
 
     setFileError("");
     setFile(f);
+
+    // Try to extract headers from first line (frontend only)
+    try {
+      const text = await f.text();
+      const firstLine = text.split(/\r?\n/)[0] || "";
+      const headers = firstLine
+        .split(",")
+        .map((h) => h.trim())
+        .filter(Boolean);
+
+      setCsvHeaders(headers);
+
+      if (headers.includes("phone_number")) {
+        setNumberColumn("phone_number");
+      } else if (headers.length > 0) {
+        setNumberColumn(headers[0]);
+      } else {
+        setNumberColumn("phone_number");
+      }
+    } catch {
+      // If anything fails, just degrade gracefully
+      setCsvHeaders([]);
+      setNumberColumn("phone_number");
+    }
   };
 
   const handleSendBroadcast = async () => {
@@ -185,19 +226,30 @@ const BroadcastView = () => {
       if (batchName.trim()) formData.append("batchName", batchName.trim());
       formData.append("components", JSON.stringify(components));
 
-      const res = await axios.post(`${import.meta.env.VITE_API_URL}/broadcast/send`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      // Optional hint for backend (does NOT break anything if ignored)
+      if (numberColumn) {
+        formData.append("numberColumn", numberColumn);
+      }
+
+      const res = await axios.post(
+        `${import.meta.env.VITE_API_URL}/broadcast/send`,
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        }
+      );
 
       const { batchId } = res.data || {};
       setSendSuccess("Broadcast queued successfully.");
       setSelectedBatchId(batchId || null);
+
+      // Reset composer (keep language to avoid annoying the user)
       setFile(null);
+      setCsvHeaders([]);
+      setNumberColumn("phone_number");
       setBatchName("");
       setTemplateName("");
       setComponentsRaw("");
-
-      fetchBatches();
     } catch (err) {
       setSendError(
         err?.response?.data?.error ||
@@ -218,22 +270,38 @@ const BroadcastView = () => {
   // --------------- UI ---------------
 
   return (
-    <div className="p-6 bg-gray-50 h-full overflow-y-auto">
+    <div className="p-4 sm:p-6 h-full overflow-y-auto bg-gradient-to-b from-emerald-50 via-gray-50 to-white">
       <div className="max-w-6xl mx-auto space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">
+            <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 flex items-center gap-2">
+              <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
+                <Send className="w-4 h-4 text-emerald-600" />
+              </span>
               Broadcast Messages
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 mt-1 max-w-xl">
               Upload a CSV of customers, select a WhatsApp template, and send
-              thousands of messages safely with full tracking.
+              thousands of messages safely with full tracking and crash-safe
+              batches.
             </p>
           </div>
-          <div className="hidden md:flex items-center gap-2 text-xs text-gray-500">
-            <Activity className="w-4 h-4" />
-            <span>20 msg/s rate-limited engine · Crash-safe batches</span>
+          <div className="hidden md:flex flex-col items-end text-xs text-gray-500">
+            <div className="inline-flex items-center gap-2 bg-white/80 border border-emerald-100 rounded-full px-3 py-1 shadow-sm">
+              <Activity className="w-3 h-3 text-emerald-600" />
+              <span>Rate-limited engine · ~20 msg/s</span>
+            </div>
+            <span className="mt-1">
+              Active:{" "}
+              <span className="font-medium text-emerald-700">
+                {activeBatches.length}
+              </span>{" "}
+              · Total:{" "}
+              <span className="font-medium text-gray-800">
+                {batches.length}
+              </span>
+            </span>
           </div>
         </div>
 
@@ -241,24 +309,24 @@ const BroadcastView = () => {
           {/* LEFT: Composer */}
           <div className="lg:col-span-2 space-y-4">
             {/* Info banner */}
-            <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex gap-3">
+            <div className="bg-emerald-50/80 border border-emerald-200 rounded-2xl p-4 flex gap-3 shadow-sm">
               <div className="mt-0.5">
-                <Radio className="w-5 h-5 text-green-600" />
+                <Radio className="w-5 h-5 text-emerald-600" />
               </div>
               <div>
-                <h3 className="font-semibold text-green-900">
+                <h3 className="font-semibold text-emerald-900">
                   Safe, individual broadcasts
                 </h3>
-                <p className="text-xs text-green-700 mt-1">
+                <p className="text-xs text-emerald-700 mt-1">
                   Each contact receives a separate message. Recipients never see
                   each other, and delivery is throttled to protect your WhatsApp
-                  number.
+                  number from bans and rate limits.
                 </p>
               </div>
             </div>
 
             {/* Campaign name */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
               <label className="block text-xs font-medium text-gray-700">
                 Campaign name (internal)
               </label>
@@ -267,11 +335,15 @@ const BroadcastView = () => {
                 value={batchName}
                 onChange={(e) => setBatchName(e.target.value)}
               />
+              <p className="text-[11px] text-gray-500">
+                This won’t be visible to customers. It’s just to help you
+                recognize this batch later in the history.
+              </p>
             </div>
 
             {/* Template */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
-              <div className="flex gap-3">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-4 shadow-sm">
+              <div className="flex flex-col sm:flex-row gap-3">
                 <div className="flex-1">
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     WhatsApp template name
@@ -283,17 +355,17 @@ const BroadcastView = () => {
                   />
                   <p className="text-[11px] text-gray-500 mt-1">
                     Must match an approved template in your WhatsApp Business
-                    account.
+                    account (exact name).
                   </p>
                 </div>
-                <div className="w-32">
+                <div className="w-full sm:w-32">
                   <label className="block text-xs font-medium text-gray-700 mb-1">
                     Language
                   </label>
                   <select
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full px-2 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                    className="w-full px-2 py-1.5 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
                   >
                     <option value="en_US">English (US)</option>
                     <option value="en_GB">English (UK)</option>
@@ -321,7 +393,7 @@ const BroadcastView = () => {
             </div>
 
             {/* CSV Upload */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 space-y-3 shadow-sm">
+            <div className="bg-white border border-gray-200 rounded-2xl p-4 space-y-3 shadow-sm">
               <div className="flex items-center justify-between mb-2">
                 <label className="block text-xs font-medium text-gray-700">
                   Recipients CSV
@@ -333,10 +405,10 @@ const BroadcastView = () => {
 
               <label
                 className={cn(
-                  "border-2 border-dashed rounded-xl p-6 text-center cursor-pointer transition",
+                  "border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition bg-white",
                   file
-                    ? "border-green-500 bg-green-50"
-                    : "border-gray-300 hover:border-green-500 hover:bg-gray-50"
+                    ? "border-emerald-500 bg-emerald-50/60"
+                    : "border-gray-300 hover:border-emerald-500 hover:bg-gray-50"
                 )}
               >
                 <input
@@ -353,12 +425,37 @@ const BroadcastView = () => {
                 </p>
                 <p className="text-[11px] text-gray-500 mt-1">
                   CSV, max 5MB. Duplicates and invalid numbers are cleaned
-                  automatically.
+                  automatically by the backend.
                 </p>
               </label>
 
               {fileError && (
                 <p className="text-[11px] text-red-600 mt-1">{fileError}</p>
+              )}
+
+              {csvHeaders.length > 0 && (
+                <div className="mt-3">
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Select phone number column
+                  </label>
+                  <select
+                    value={numberColumn}
+                    onChange={(e) => setNumberColumn(e.target.value)}
+                    className="w-full px-3 py-2 border rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-white"
+                  >
+                    {csvHeaders.map((h) => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-[11px] text-gray-500 mt-1">
+                    This is a hint for the system about which CSV header holds
+                    your phone numbers. Existing behavior keeps using
+                    <span className="font-mono"> phone_number</span> unless the
+                    backend is updated.
+                  </p>
+                </div>
               )}
             </div>
 
@@ -367,7 +464,10 @@ const BroadcastView = () => {
               <Button
                 onClick={handleSendBroadcast}
                 disabled={isSending}
-                className="w-full flex items-center justify-center gap-2 bg-green-600 text-white hover:bg-green-700 py-3 rounded-xl font-semibold"
+                className={cn(
+                  "w-full flex items-center justify-center gap-2 py-3 rounded-2xl font-semibold shadow-sm",
+                  "bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60 disabled:cursor-not-allowed"
+                )}
                 icon={Send}
               >
                 {isSending ? (
@@ -381,13 +481,15 @@ const BroadcastView = () => {
               </Button>
 
               {sendError && (
-                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-                  {sendError}
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                  <XCircle className="w-3 h-3 mt-0.5" />
+                  <span>{sendError}</span>
                 </div>
               )}
               {sendSuccess && (
-                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-                  {sendSuccess}
+                <div className="text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2 flex items-start gap-2">
+                  <CheckCircle2 className="w-3 h-3 mt-0.5" />
+                  <span>{sendSuccess}</span>
                 </div>
               )}
             </div>
@@ -396,10 +498,10 @@ const BroadcastView = () => {
           {/* RIGHT: Batches & details */}
           <div className="lg:col-span-3 space-y-4">
             {/* Active batches */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-                  <Activity className="w-4 h-4 text-green-600" />
+                  <Activity className="w-4 h-4 text-emerald-600" />
                   Live broadcasts
                 </h3>
                 {loadingBatches && (
@@ -411,8 +513,9 @@ const BroadcastView = () => {
               </div>
 
               {batchesError && (
-                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3">
-                  {batchesError}
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-3 flex items-start gap-2">
+                  <XCircle className="w-3 h-3 mt-0.5" />
+                  <span>{batchesError}</span>
                 </div>
               )}
 
@@ -431,16 +534,17 @@ const BroadcastView = () => {
                       key={batch._id}
                       onClick={() => setSelectedBatchId(batch._id)}
                       className={cn(
-                        "w-full text-left border rounded-lg p-3 flex flex-col gap-2 hover:border-green-500 transition",
-                        isSelected && "border-green-600 bg-green-50/40"
+                        "w-full text-left border rounded-xl p-3 flex flex-col gap-2 transition",
+                        "hover:border-emerald-500 hover:bg-emerald-50/40",
+                        isSelected && "border-emerald-600 bg-emerald-50/70"
                       )}
                     >
                       <div className="flex items-center justify-between gap-2">
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">
                             {batch.name || `Batch ${batch._id.slice(-6)}`}
                           </p>
-                          <p className="text-[11px] text-gray-500">
+                          <p className="text-[11px] text-gray-500 truncate">
                             Template:{" "}
                             <span className="font-mono">
                               {batch.templateName}
@@ -450,7 +554,7 @@ const BroadcastView = () => {
                         </div>
                         <span
                           className={cn(
-                            "text-[11px] px-2 py-0.5 rounded-full border",
+                            "text-[11px] px-2 py-0.5 rounded-full border whitespace-nowrap",
                             statusColor(batch.status)
                           )}
                         >
@@ -461,7 +565,7 @@ const BroadcastView = () => {
                       <div>
                         <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
                           <div
-                            className="h-full bg-green-500 transition-all"
+                            className="h-full bg-emerald-500 transition-all"
                             style={{ width: `${progress}%` }}
                           />
                         </div>
@@ -485,7 +589,7 @@ const BroadcastView = () => {
             </div>
 
             {/* History */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-600" />
@@ -512,7 +616,9 @@ const BroadcastView = () => {
                         <th className="py-2 text-left font-medium">Failed</th>
                         <th className="py-2 text-left font-medium">Total</th>
                         <th className="py-2 text-left font-medium">Status</th>
-                        <th className="py-2 text-left font-medium">Finished</th>
+                        <th className="py-2 text-left font-medium">
+                          Finished
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -521,16 +627,16 @@ const BroadcastView = () => {
                           key={batch._id}
                           className={cn(
                             "border-b last:border-0 hover:bg-gray-50 cursor-pointer",
-                            selectedBatchId === batch._id && "bg-green-50/40"
+                            selectedBatchId === batch._id && "bg-emerald-50/60"
                           )}
                           onClick={() => setSelectedBatchId(batch._id)}
                         >
                           <td className="py-2 pr-2">
-                            <div className="truncate max-w-[160px]">
+                            <div className="truncate max-w-[180px]">
                               {batch.name || `Batch ${batch._id.slice(-6)}`}
                             </div>
                           </td>
-                          <td className="py-2 pr-2 font-mono text-[11px]">
+                          <td className="py-2 pr-2 font-mono text-[11px] truncate max-w-[140px]">
                             {batch.templateName}
                           </td>
                           <td className="py-2 pr-2 text-emerald-700">
@@ -571,7 +677,7 @@ const BroadcastView = () => {
             </div>
 
             {/* Details panel */}
-            <div className="bg-white border border-gray-200 rounded-xl p-4 shadow-sm">
+            <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900">
                   Batch details
@@ -585,8 +691,9 @@ const BroadcastView = () => {
               </div>
 
               {batchDetailsError && (
-                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2">
-                  {batchDetailsError}
+                <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2 mb-2 flex items-start gap-2">
+                  <XCircle className="w-3 h-3 mt-0.5" />
+                  <span>{batchDetailsError}</span>
                 </div>
               )}
 
@@ -598,7 +705,7 @@ const BroadcastView = () => {
 
               {selectedBatch && (
                 <div className="space-y-3 text-xs text-gray-800">
-                  <div className="flex flex-wrap justify-between gap-2">
+                  <div className="flex flex-wrap justify-between gap-3">
                     <div>
                       <p className="text-[11px] text-gray-500">Campaign</p>
                       <p className="font-medium">
@@ -673,8 +780,9 @@ const BroadcastView = () => {
                   </div>
 
                   <div className="mt-2 text-[11px] text-gray-500">
-                    Later you can add per-recipient logs here (export failed
-                    numbers, see error reasons, etc.).
+                    Later you can extend this panel with per-recipient logs
+                    (export failed numbers, see error reasons, etc.) without
+                    changing the layout.
                   </div>
                 </div>
               )}
