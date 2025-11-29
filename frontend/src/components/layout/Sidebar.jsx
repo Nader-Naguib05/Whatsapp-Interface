@@ -25,19 +25,17 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, activeTab, setActiveTab }) => {
         `
         flex flex-col border-r border-gray-200 bg-white
         shadow-sm transition-all duration-300
-        z-50 relative
-        lg:static
+        z-50
+        h-full
+        fixed lg:relative top-0 left-0
       `,
-
         // Desktop widths
         sidebarOpen ? "lg:w-64 w-60" : "lg:w-20 w-0",
 
-        // Mobile slide-over
+        // *** Mobile slide-over using wa-mobile-visible/hidden ***
         sidebarOpen
-          ? "translate-x-0"
-          : "-translate-x-full lg:translate-x-0",
-
-        "fixed lg:relative top-0 left-0 h-full"
+          ? "wa-mobile-visible"
+          : "wa-mobile-hidden"
       )}
     >
       {/* Header */}
@@ -48,7 +46,6 @@ const Sidebar = ({ sidebarOpen, setSidebarOpen, activeTab, setActiveTab }) => {
           </h1>
         )}
 
-        {/* Toggle button */}
         <button
           onClick={() => setSidebarOpen(!sidebarOpen)}
           className="p-2 rounded-xl hover:bg-gray-100 transition"
