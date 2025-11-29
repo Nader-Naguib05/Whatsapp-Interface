@@ -1,12 +1,5 @@
 // src/pages/WhatsAppDashboard.jsx
-import React, {
-    useState,
-    useEffect,
-    useMemo,
-    useRef,
-    useReducer,
-} from "react";
-
+import React, { useState, useEffect, useMemo, useRef, useReducer } from "react";
 const BACKEND = import.meta.env.VITE_API_URL;
 
 import Sidebar from "../components/layout/Sidebar";
@@ -16,11 +9,7 @@ import ContactsView from "../components/contacts/ContactsView";
 import SettingsView from "../components/settings/SettingsView";
 import ChatLayout from "../components/chats/ChatLayout";
 
-import {
-    ANALYTICS_STATS,
-    MESSAGE_VOLUME,
-    maxVolume,
-} from "../data/mockData";
+import { ANALYTICS_STATS, MESSAGE_VOLUME, maxVolume } from "../data/mockData";
 
 import {
     getConversations,
@@ -29,44 +18,39 @@ import {
 
 import { createSocket } from "../lib/socket";
 import EmojiPicker from "emoji-picker-react";
-import { Menu, X } from "lucide-react";
 
 const PAGE_SIZE = 40;
 
-const normalizePhone = (phone) =>
-    (phone || "").toString().replace(/\D/g, "");
+// Normalize phone so +2010..., 010..., spaces, etc. all resolve to same key
+const normalizePhone = (phone) => (phone || "").toString().replace(/\D/g, "");
 
 const initialState = {
     conversations: [],
-    messagesByConv: {},
+    messagesByConv: {}, // { [convId]: Message[] }
     activeConversationId: null,
     composerValue: "",
     messagePagingByConv: {},
 };
 
+// Given a conversationId -> array of messages, insert/merge a new message
 function upsertMessageInArray(prevArray, newMsg) {
     let existsIndex = -1;
 
     if (newMsg.clientId) {
         existsIndex = prevArray.findIndex(
-            (m) => m.clientId === newMsg.clientId
+            (m) => m.clientId && m.clientId === newMsg.clientId
         );
     }
 
     if (existsIndex === -1 && newMsg.id) {
-        existsIndex = prevArray.findIndex(
-            (m) => m.id === newMsg.id
-        );
+        existsIndex = prevArray.findIndex((m) => m.id === newMsg.id);
     }
 
     if (existsIndex === -1) {
         return [...prevArray, newMsg];
     } else {
         const updated = [...prevArray];
-        updated[existsIndex] = {
-            ...updated[existsIndex],
-            ...newMsg,
-        };
+        updated[existsIndex] = { ...updated[existsIndex], ...newMsg };
         return updated;
     }
 }
@@ -105,7 +89,11 @@ function reducer(state, action) {
                 ...state,
                 conversations: state.conversations.map((c) =>
                     String(c.id) === String(conversationId)
-                        ? { ...c, unread: unreadCount, unreadCount }
+                        ? {
+                              ...c,
+                              unread: unreadCount,
+                              unreadCount,
+                          }
                         : c
                 ),
             };
@@ -130,16 +118,12 @@ function reducer(state, action) {
 
         case "PREPEND_MESSAGES_FOR_CONV": {
             const { conversationId, messages } = action.payload;
-            const prev =
-                state.messagesByConv[conversationId] || [];
+            const prev = state.messagesByConv[conversationId] || [];
             return {
                 ...state,
                 messagesByConv: {
                     ...state.messagesByConv,
-                    [conversationId]: [
-                        ...messages,
-                        ...prev,
-                    ],
+                    [conversationId]: [...messages, ...prev],
                 },
             };
         }
@@ -163,8 +147,7 @@ function reducer(state, action) {
 
         case "OPTIMISTIC_APPEND_MESSAGE": {
             const { conversationId, message } = action.payload;
-            const prev =
-                state.messagesByConv[conversationId] || [];
+            const prev = state.messagesByConv[conversationId] || [];
             return {
                 ...state,
                 messagesByConv: {
@@ -176,14 +159,10 @@ function reducer(state, action) {
         }
 
         case "SERVER_ACK_MESSAGE": {
-            const { conversationId, clientId, serverMsg } =
-                action.payload;
-            const prev =
-                state.messagesByConv[conversationId] || [];
+            const { conversationId, clientId, serverMsg } = action.payload;
+            const prev = state.messagesByConv[conversationId] || [];
             const updated = prev.map((m) =>
-                m.clientId === clientId
-                    ? { ...m, ...serverMsg, clientId }
-                    : m
+                m.clientId === clientId ? { ...m, ...serverMsg, clientId } : m
             );
             return {
                 ...state,
@@ -196,8 +175,7 @@ function reducer(state, action) {
 
         case "UPSERT_MESSAGE": {
             const { conversationId, msg } = action.payload;
-            const prev =
-                state.messagesByConv[conversationId] || [];
+            const prev = state.messagesByConv[conversationId] || [];
             const updated = upsertMessageInArray(prev, msg);
             return {
                 ...state,
@@ -210,12 +188,9 @@ function reducer(state, action) {
 
         case "BULK_MARK_MESSAGES_READ": {
             const { conversationId } = action.payload;
-            const prev =
-                state.messagesByConv[conversationId] || [];
+            const prev = state.messagesByConv[conversationId] || [];
             const updated = prev.map((m) =>
-                m.fromMe
-                    ? m
-                    : { ...m, status: "read" }
+                m.fromMe ? m : { ...m, status: "read" }
             );
             return {
                 ...state,
@@ -233,28 +208,22 @@ function reducer(state, action) {
 
 const WhatsAppDashboard = () => {
     const [activeTab, setActiveTab] = useState("chats");
-
-    const [mobileSidebarOpen, setMobileSidebarOpen] =
-        useState(false); // ⭐ NEW: mobile sidebar toggle
-
+    const [sidebarOpen, setSidebarOpen] = useState(true);
     const [socket, setSocket] = useState(null);
     const prevChatRef = useRef(null);
     const fileInputRef = useRef(null);
-
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+
     const emojiPickerRef = useRef(null);
 
+    // contacts state + map
     const [contacts, setContacts] = useState([]);
     const [contactsMap, setContactsMap] = useState({});
 
-    const [conversationSearch, setConversationSearch] =
-        useState("");
-
-    const [isCustomerTyping, setIsCustomerTyping] =
-        useState(false);
-    const [typingConversationId, setTypingConversationId] =
-        useState(null);
-
+    // conversation search, typing, presence, global unread, notifications
+    const [conversationSearch, setConversationSearch] = useState("");
+    const [isCustomerTyping, setIsCustomerTyping] = useState(false);
+    const [typingConversationId, setTypingConversationId] = useState(null);
     const [contactStatus, setContactStatus] = useState(null);
     const [globalUnread, setGlobalUnread] = useState(0);
 
@@ -272,66 +241,36 @@ const WhatsAppDashboard = () => {
     } = state;
 
     const activeConversation =
-        conversations.find(
-            (c) =>
-                String(c.id) ===
-                String(activeConversationId)
-        ) || null;
+        conversations.find((c) => String(c.id) === String(activeConversationId)) ||
+        null;
 
-    const activeMessages =
-        messagesByConv[String(activeConversationId)] || [];
+    const activeMessages = activeConversationId
+        ? messagesByConv[String(activeConversationId)] || []
+        : [];
 
-    const activePaging =
-        messagePagingByConv[String(activeConversationId)] || {
-            hasMore: false,
-            loading: false,
-            cursor: null,
-        };
+    const activePaging = activeConversationId
+        ? messagePagingByConv[String(activeConversationId)] || {
+              hasMore: false,
+              loading: false,
+              cursor: null,
+          }
+        : {
+              hasMore: false,
+              loading: false,
+              cursor: null,
+          };
 
-    const [contactDetailsToShow, setContactDetailsToShow] =
-        useState(null);
+    const [contactDetailsToShow, setContactDetailsToShow] = useState(null);
 
-    const backendUrl =
-        BACKEND || "http://localhost:5000";
+    const handleOpenContactDetails = () => {
+        if (!activeContact) return;
+        setContactDetailsToShow(activeContact);
+    };
 
-    const normalizeActivePhone = normalizePhone(
-        activeConversation?.phone
-    );
-
-    const activeContact =
-        normalizeActivePhone &&
-        contactsMap[normalizeActivePhone]
-            ? contactsMap[normalizeActivePhone]
-            : null;
-
-    /* ---------------------------------------------------
-         MOBILE SIDEBAR BEHAVIOR
-    --------------------------------------------------- */
-
-    const isMobile =
-        typeof window !== "undefined" &&
-        window.innerWidth < 768;
-
-    // close sidebar when switching conversations
-    useEffect(() => {
-        if (isMobile) setMobileSidebarOpen(false);
-    }, [activeConversationId]);
-
-    // lock body scroll when sidebar open
-    useEffect(() => {
-        if (isMobile) {
-            document.body.style.overflow = mobileSidebarOpen
-                ? "hidden"
-                : "";
-        }
-    }, [mobileSidebarOpen]);
-
-    /* ---------------------------------------------------
-         EMOJI PICKER OUTSIDE CLICK
-    --------------------------------------------------- */
+    // --- emoji picker outside click close ---
     useEffect(() => {
         if (!showEmojiPicker) return;
-        const handler = (e) => {
+        const handleEmojiOutside = (e) => {
             if (
                 emojiPickerRef.current &&
                 !emojiPickerRef.current.contains(e.target)
@@ -339,19 +278,18 @@ const WhatsAppDashboard = () => {
                 setShowEmojiPicker(false);
             }
         };
-        document.addEventListener("mousedown", handler);
-        return () =>
-            document.removeEventListener("mousedown", handler);
+        document.addEventListener("mousedown", handleEmojiOutside);
+        return () => {
+            document.removeEventListener("mousedown", handleEmojiOutside);
+        };
     }, [showEmojiPicker]);
 
-    // auto close on tab change or conversation change
+    // --- auto close emoji picker on tab / conversation change ---
     useEffect(() => {
         setShowEmojiPicker(false);
     }, [activeTab, activeConversationId]);
 
-    /* ---------------------------------------------------
-         FOCUS, NOTIFICATIONS
-    --------------------------------------------------- */
+    // --- window focus tracking for smarter notifications ---
     useEffect(() => {
         if (typeof window === "undefined") return;
         const handleFocus = () => {
@@ -368,22 +306,25 @@ const WhatsAppDashboard = () => {
         };
     }, []);
 
+    // If window is not focused, we can bump unread or update tab title, etc.
     useEffect(() => {
-        document.title =
-            globalUnread > 0
-                ? `(${globalUnread}) WhatsApp Interface`
-                : "WhatsApp Interface";
+        if (!document) return;
+        if (!globalUnread) {
+            document.title = "WhatsApp Interface";
+        } else {
+            document.title = `(${globalUnread}) WhatsApp Interface`;
+        }
     }, [globalUnread]);
 
-    /* ---------------------------------------------------
-         LOAD CONTACTS
-    --------------------------------------------------- */
+    // local pointer to current backend
+    const backendUrl = BACKEND || "http://localhost:5000";
+
+    // load contacts
     useEffect(() => {
         const fetchContacts = async () => {
             try {
-                const res = await fetch(
-                    `${backendUrl}/contacts`
-                );
+                const res = await fetch(`${backendUrl}/contacts`);
+                if (!res.ok) throw new Error("Failed to load contacts");
                 const data = await res.json();
                 setContacts(data || []);
 
@@ -394,43 +335,43 @@ const WhatsAppDashboard = () => {
                 });
                 setContactsMap(map);
             } catch (err) {
-                console.error("Error loading contacts:", err);
+                console.error("Error fetching contacts:", err);
             }
         };
         fetchContacts();
     }, [backendUrl]);
 
-    /* ---------------------------------------------------
-         LOAD CONVERSATIONS
-    --------------------------------------------------- */
+    // figure out active contact
+    const activePhone = activeConversation?.phone || "";
+    const normalizedActivePhone = normalizePhone(activePhone);
+    const activeContact =
+        normalizedActivePhone && contactsMap[normalizedActivePhone]
+            ? contactsMap[normalizedActivePhone]
+            : null;
+
+    // load initial conversations
     useEffect(() => {
         let cancelled = false;
-
         (async () => {
             try {
-                const convs = await getConversations(
-                    backendUrl
-                );
+                const convs = await getConversations(backendUrl);
                 if (cancelled) return;
 
                 const normalized = convs.map((c) => {
                     const key = normalizePhone(c.phone);
-                    const contact =
-                        key && contactsMap[key]
-                            ? contactsMap[key]
-                            : null;
+                    const contact = key && contactsMap[key] ? contactsMap[key] : null;
                     const name =
                         (contact && contact.name) ||
                         c.name ||
                         c.displayName ||
                         c.phone ||
                         "Unknown";
+
                     return {
                         id: String(c._id || c.id),
                         _id: c._id,
                         name,
-                        displayName:
-                            c.displayName || c.name || name,
+                        displayName: c.displayName || c.name || name,
                         phone: c.phone,
                         lastMessage: c.lastMessage || "",
                         lastMessageAt:
@@ -438,37 +379,26 @@ const WhatsAppDashboard = () => {
                             c.updatedAt ||
                             c.createdAt ||
                             new Date().toISOString(),
-                        unread:
-                            c.unreadCount || c.unread || 0,
-                        unreadCount:
-                            c.unreadCount || c.unread || 0,
+                        unread: c.unreadCount || c.unread || 0,
+                        unreadCount: c.unreadCount || c.unread || 0,
                     };
                 });
 
                 normalized.sort(
                     (a, b) =>
-                        new Date(b.lastMessageAt) -
-                        new Date(a.lastMessageAt)
+                        new Date(b.lastMessageAt).getTime() -
+                        new Date(a.lastMessageAt).getTime()
                 );
 
-                dispatch({
-                    type: "SET_CONVERSATIONS",
-                    payload: normalized,
-                });
+                dispatch({ type: "SET_CONVERSATIONS", payload: normalized });
 
-                setGlobalUnread(
-                    normalized.reduce(
-                        (acc, c) =>
-                            acc +
-                            (c.unreadCount || c.unread || 0),
-                        0
-                    )
+                const totalUnread = normalized.reduce(
+                    (sum, c) => sum + (c.unreadCount || 0),
+                    0
                 );
+                setGlobalUnread(totalUnread);
             } catch (err) {
-                console.error(
-                    "Error loading conversations:",
-                    err
-                );
+                console.error("Failed to load conversations:", err);
             }
         })();
 
@@ -477,27 +407,16 @@ const WhatsAppDashboard = () => {
         };
     }, [backendUrl, contactsMap]);
 
-    /* ---------------------------------------------------
-         LOAD MESSAGES (for active conversation)
-    --------------------------------------------------- */
-    const loadMessagesPage = async (
-        conversationId,
-        cursor = null,
-        replace = false
-    ) => {
+    // load messages for active conversation
+    const loadMessagesPage = async (conversationId, cursor = null, replace = false) => {
         if (!conversationId) return;
-
         try {
             dispatch({
                 type: "SET_PAGING_FOR_CONV",
                 payload: {
                     conversationId,
                     paging: {
-                        ...(
-                            messagePagingByConv[
-                                conversationId
-                            ] || {}
-                        ),
+                        ...(messagePagingByConv[conversationId] || {}),
                         loading: true,
                     },
                 },
@@ -515,6 +434,7 @@ const WhatsAppDashboard = () => {
             let hasMore = false;
 
             if (Array.isArray(res)) {
+                // backward compatible: old API returns plain array
                 msgs = res;
                 nextCursor = null;
                 hasMore = false;
@@ -554,17 +474,13 @@ const WhatsAppDashboard = () => {
                 },
             });
         } catch (err) {
-            console.error("Error loading messages:", err);
+            console.error("Failed to load messages:", err);
             dispatch({
                 type: "SET_PAGING_FOR_CONV",
                 payload: {
                     conversationId,
                     paging: {
-                        ...(
-                            messagePagingByConv[
-                                conversationId
-                            ] || {}
-                        ),
+                        ...(messagePagingByConv[conversationId] || {}),
                         loading: false,
                     },
                 },
@@ -574,88 +490,58 @@ const WhatsAppDashboard = () => {
 
     useEffect(() => {
         if (!activeConversationId) return;
-        loadMessagesPage(
-            String(activeConversationId),
-            null,
-            true
-        );
+        loadMessagesPage(String(activeConversationId), null, true);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [activeConversationId]);
 
-    /* ---------------------------------------------------
-         SEARCH + UI FILTERS
-    --------------------------------------------------- */
     const filteredConversations = useMemo(() => {
-        const withContactNames = conversations.map((c) => {
+        const withContactNames = (conversations || []).map((c) => {
             const key = normalizePhone(c.phone);
-            const contact =
-                key && contactsMap[key]
-                    ? contactsMap[key]
-                    : null;
+            const contact = key && contactsMap[key] ? contactsMap[key] : null;
             if (!contact) return c;
             return { ...c, name: contact.name };
         });
 
-        if (!conversationSearch.trim())
-            return withContactNames;
+        if (!conversationSearch.trim()) return withContactNames;
 
         const q = conversationSearch.toLowerCase();
+
         return withContactNames.filter((c) => {
-            const name = (
-                c.name ||
-                c.displayName ||
-                ""
-            ).toLowerCase();
+            const name = (c.name || c.displayName || "").toLowerCase();
             const phone = (c.phone || "").toLowerCase();
-            const last = (
-                c.lastMessage || ""
-            ).toLowerCase();
-            return (
-                name.includes(q) ||
-                phone.includes(q) ||
-                last.includes(q)
-            );
+            const last = (c.lastMessage || "").toLowerCase();
+            return name.includes(q) || phone.includes(q) || last.includes(q);
         });
     }, [conversations, contactsMap, conversationSearch]);
 
-    const layoutConversations = useMemo(() => {
-        return filteredConversations.map((c) => ({
-            id: String(c.id),
-            name:
-                c.name ||
-                c.displayName ||
-                c.phone ||
-                "Unknown",
-            phone: c.phone,
-            lastMessage: c.lastMessage || "",
-            lastMessageAt: c.lastMessageAt,
-            unread:
-                c.unreadCount || c.unread || 0,
-        }));
-    }, [filteredConversations]);
+    const layoutConversations = useMemo(
+        () =>
+            filteredConversations.map((c) => ({
+                id: String(c.id),
+                name: c.name || c.displayName || c.phone || "Unknown",
+                phone: c.phone,
+                lastMessage: c.lastMessage || "",
+                lastMessageAt: c.lastMessageAt,
+                unread: c.unreadCount || c.unread || 0,
+            })),
+        [filteredConversations]
+    );
 
     const layoutMessages = useMemo(() => {
-        return activeMessages.map((raw) => {
+        return (activeMessages || []).map((raw) => {
             if (raw.uiNormalized) return raw;
 
             const conversation =
                 conversations.find(
                     (c) =>
                         String(c.id) ===
-                        String(
-                            raw.conversationId ||
-                                raw.conversation ||
-                                activeConversationId
-                        )
+                        String(raw.conversationId || raw.conversation || activeConversationId)
                 ) || activeConversation;
 
-            const convId = String(
-                conversation._id || conversation.id
-            );
-            const senderType =
-                raw.senderType || raw.sender || "customer";
+            const convId = String(conversation._id || conversation.id);
+            const senderType = raw.senderType || raw.sender || "customer";
 
-            return {
+            const uiMsg = {
                 id: raw._id,
                 clientId: raw.clientId || undefined,
                 conversationId: convId,
@@ -663,19 +549,13 @@ const WhatsAppDashboard = () => {
                 body: raw.body,
                 mediaUrl: raw.mediaUrl,
                 senderType,
-                fromMe:
-                    senderType === "agent",
-                from:
-                    senderType === "agent"
-                        ? "business"
-                        : "customer",
+                fromMe: senderType === "agent",
+                from: senderType === "agent" ? "business" : "customer",
                 status: raw.status || "sent",
-                timestamp:
-                    raw.timestamp ||
-                    raw.createdAt ||
-                    raw.updatedAt,
+                timestamp: raw.timestamp || raw.createdAt || raw.updatedAt,
                 uiNormalized: true,
             };
+            return uiMsg;
         });
     }, [
         activeMessages,
@@ -684,9 +564,7 @@ const WhatsAppDashboard = () => {
         activeConversationId,
     ]);
 
-    /* ---------------------------------------------------
-         SOCKET
-    --------------------------------------------------- */
+    // socket connection
     useEffect(() => {
         const s = createSocket(backendUrl);
 
@@ -702,14 +580,10 @@ const WhatsAppDashboard = () => {
             if (!payload) return;
             const { conversation, message } = payload;
 
-            const convId = String(
-                conversation._id || conversation.id
-            );
-            const senderType =
-                message.senderType ||
-                message.sender ||
-                "customer";
+            const convId = String(conversation._id || conversation.id);
+            const senderType = message.senderType || message.sender || "customer";
 
+            // 1) upsert conversation at top
             dispatch({
                 type: "UPSERT_CONVERSATION_TOP",
                 payload: {
@@ -723,47 +597,37 @@ const WhatsAppDashboard = () => {
                             conversation.phone ||
                             "Unknown",
                         phone: conversation.phone,
-                        lastMessage:
-                            message.body || "",
+                        lastMessage: message.body || "",
                         lastMessageAt:
                             message.timestamp ||
                             message.createdAt ||
                             new Date().toISOString(),
                         unread:
-                            convId ===
-                            String(activeConversationId)
+                            convId === String(activeConversationId)
                                 ? 0
-                                : (conversation.unreadCount ||
-                                      0) + 1,
+                                : (conversation.unreadCount || 0) + 1,
                         unreadCount:
-                            convId ===
-                            String(activeConversationId)
+                            convId === String(activeConversationId)
                                 ? 0
-                                : (conversation.unreadCount ||
-                                      0) + 1,
+                                : (conversation.unreadCount || 0) + 1,
                     },
                 },
             });
 
+            // 2) upsert message in that conversation's array
             const uiMsg = {
                 id: message._id,
-                clientId:
-                    message.clientId || undefined,
+                clientId: message.clientId || undefined,
                 conversationId: convId,
                 text: message.body,
                 body: message.body,
                 mediaUrl: message.mediaUrl,
                 senderType,
                 fromMe: senderType === "agent",
-                from:
-                    senderType === "agent"
-                        ? "business"
-                        : "customer",
+                from: senderType === "agent" ? "business" : "customer",
                 status: message.status || "sent",
                 timestamp:
-                    message.timestamp ||
-                    message.createdAt ||
-                    new Date().toISOString(),
+                    message.timestamp || message.createdAt || new Date().toISOString(),
                 uiNormalized: true,
             };
 
@@ -775,37 +639,39 @@ const WhatsAppDashboard = () => {
                 },
             });
 
+            // 3) handle unread + notifications
+            setGlobalUnread((prev) => {
+                const conv = state.conversations.find(
+                    (c) => String(c.id) === convId
+                );
+                const convUnread =
+                    conv && conv.id === activeConversationId
+                        ? 0
+                        : (conv?.unreadCount || 0) + 1;
+                const newTotal = prev + 1;
+                return newTotal;
+            });
+
             if (
                 !hasWindowFocusRef.current &&
                 senderType === "customer" &&
-                convId !==
-                    String(activeConversationId)
+                convId !== String(activeConversationId)
             ) {
                 if (notificationAudioRef.current) {
-                    notificationAudioRef.current.currentTime =
-                        0;
-                    notificationAudioRef.current
-                        .play()
-                        .catch(() => {});
+                    notificationAudioRef.current.currentTime = 0;
+                    notificationAudioRef.current.play().catch(() => {});
                 }
             }
-
-            setGlobalUnread((prev) => prev + 1);
         });
 
         s.on("message:status-update", (payload) => {
             if (!payload) return;
-            const { conversationId, messageId, status } =
-                payload;
+            const { conversationId, messageId, status } = payload;
+            if (!conversationId || !messageId || !status) return;
 
-            const prev =
-                state.messagesByConv[
-                    conversationId
-                ] || [];
+            const prev = state.messagesByConv[conversationId] || [];
             const updated = prev.map((m) =>
-                String(m.id) === String(messageId)
-                    ? { ...m, status }
-                    : m
+                String(m.id) === String(messageId) ? { ...m, status } : m
             );
 
             dispatch({
@@ -820,34 +686,26 @@ const WhatsAppDashboard = () => {
         s.on("conversation:typing", (payload) => {
             if (!payload) return;
             const { conversationId } = payload;
+            if (!conversationId) return;
 
-            setTypingConversationId(
-                String(conversationId)
-            );
+            setTypingConversationId(String(conversationId));
             setIsCustomerTyping(true);
 
             if (typingTimeoutRef.current) {
-                clearTimeout(
-                    typingTimeoutRef.current
-                );
+                clearTimeout(typingTimeoutRef.current);
             }
-            typingTimeoutRef.current = setTimeout(
-                () => {
-                    setIsCustomerTyping(false);
-                    setTypingConversationId(null);
-                },
-                2500
-            );
+            typingTimeoutRef.current = setTimeout(() => {
+                setIsCustomerTyping(false);
+                setTypingConversationId(null);
+            }, 2500);
         });
 
         s.on("conversation:presence", (payload) => {
             if (!payload) return;
             const { conversationId, status } = payload;
+            if (!conversationId) return;
 
-            if (
-                String(conversationId) ===
-                String(activeConversationId)
-            ) {
+            if (String(conversationId) === String(activeConversationId)) {
                 setContactStatus(status);
             }
         });
@@ -860,17 +718,14 @@ const WhatsAppDashboard = () => {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [backendUrl]);
 
-    /* ---------------------------------------------------
-         UNREAD CLEAR ON OPEN
-    --------------------------------------------------- */
+    // if active conversation changes, clear unread for that conv
     useEffect(() => {
         if (!activeConversationId) return;
 
         dispatch({
             type: "UPDATE_CONVERSATION_UNREAD",
             payload: {
-                conversationId:
-                    activeConversationId,
+                conversationId: activeConversationId,
                 unreadCount: 0,
             },
         });
@@ -878,50 +733,35 @@ const WhatsAppDashboard = () => {
         dispatch({
             type: "BULK_MARK_MESSAGES_READ",
             payload: {
-                conversationId:
-                    activeConversationId,
+                conversationId: String(activeConversationId),
             },
         });
 
         setGlobalUnread((prev) => {
             const conv = state.conversations.find(
-                (c) =>
-                    String(c.id) ===
-                    String(activeConversationId)
+                (c) => String(c.id) === String(activeConversationId)
             );
-            return Math.max(
-                0,
-                prev -
-                    (conv?.unreadCount ||
-                        0)
-            );
+            const diff = conv?.unreadCount || 0;
+            return Math.max(0, prev - diff);
         });
     }, [activeConversationId, state.conversations]);
 
-    /* ---------------------------------------------------
-         UI HANDLERS
-    --------------------------------------------------- */
+    const activeConversationMessages = messagesByConv[String(activeConversationId)] || [];
+
     const handleSelectConversation = (id) => {
-        dispatch({
-            type: "SET_ACTIVE_CONVERSATION",
-            payload: id,
-        });
-        setContactDetailsToShow(null);
+        if (!id) return;
+        dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: id });
         setActiveTab("chats");
-        if (isMobile) setMobileSidebarOpen(false);
+        setContactDetailsToShow(null);
     };
 
     const handleSend = async (text) => {
-        if (!text.trim() || !activeConversationId)
-            return;
+        if (!text.trim() || !activeConversationId) return;
 
-        const conversationId =
-            String(activeConversationId);
+        const conversationId = String(activeConversationId);
         const time = new Date().toISOString();
 
-        const clientId =
-            "msg-" +
-            (crypto.randomUUID?.() || Date.now());
+        const clientId = "msg-" + (crypto.randomUUID?.() || Date.now());
 
         const optimisticMsg = {
             clientId,
@@ -965,31 +805,21 @@ const WhatsAppDashboard = () => {
                 {
                     method: "POST",
                     headers: {
-                        "Content-Type":
-                            "application/json",
+                        "Content-Type": "application/json",
                     },
-                    body: JSON.stringify({
-                        text,
-                        clientId,
-                    }),
+                    body: JSON.stringify({ text, clientId }),
                 }
             );
 
-            if (!res.ok)
-                throw new Error(
-                    "Failed to send message"
-                );
-
+            if (!res.ok) {
+                throw new Error("Failed to send message");
+            }
             const data = await res.json();
 
             const serverMsg = {
                 id: data._id,
-                status:
-                    data.status || "sent",
-                timestamp:
-                    data.timestamp ||
-                    data.createdAt ||
-                    time,
+                status: data.status || "sent",
+                timestamp: data.timestamp || data.createdAt || time,
             };
 
             dispatch({
@@ -1001,10 +831,7 @@ const WhatsAppDashboard = () => {
                 },
             });
         } catch (err) {
-            console.error(
-                "Send message failed:",
-                err
-            );
+            console.error("Send message failed:", err);
             dispatch({
                 type: "UPSERT_MESSAGE",
                 payload: {
@@ -1019,36 +846,26 @@ const WhatsAppDashboard = () => {
     };
 
     const handleRetryMessage = async (msg) => {
-        if (
-            !msg ||
-            !msg.conversationId ||
-            !msg.clientId
-        )
-            return;
+        if (!msg || !msg.conversationId || !msg.clientId) return;
         await handleSend(msg.text || msg.body || "");
     };
 
     const handleLoadOlderMessages = () => {
         if (!activeConversationId) return;
-        const conversationId =
-            String(activeConversationId);
-        const paging =
-            messagePagingByConv[conversationId];
-        if (
-            paging &&
-            paging.hasMore &&
-            !paging.loading
-        ) {
-            loadMessagesPage(
-                conversationId,
-                paging.cursor,
-                false
-            );
+        const conversationId = String(activeConversationId);
+        const paging = messagePagingByConv[conversationId];
+        if (paging && paging.hasMore && !paging.loading) {
+            loadMessagesPage(conversationId, paging.cursor, false);
         }
     };
 
-    const handleAttachClick = () =>
+    const handleToggleSidebar = () => {
+        setSidebarOpen((prev) => !prev);
+    };
+
+    const handleAttachClick = () => {
         fileInputRef.current?.click();
+    };
 
     const handleFileSelected = async (e) => {
         const file = e.target.files[0];
@@ -1056,24 +873,18 @@ const WhatsAppDashboard = () => {
 
         if (!file || !activeConversationId) return;
 
-        const convId = String(
-            activeConversation?.id ||
-                activeConversationId
-        );
+        const convId = String(activeConversation?.id || activeConversationId);
         const time = new Date().toISOString();
         const mime = file.type;
 
         const isImage = mime.startsWith("image/");
         const isVideo = mime.startsWith("video/");
         const isAudio = mime.startsWith("audio/");
-        const isDocument =
-            !isImage && !isVideo && !isAudio;
+        const isDocument = !isImage && !isVideo && !isAudio;
 
         const localUrl = URL.createObjectURL(file);
 
-        const clientId =
-            "file-" +
-            (crypto.randomUUID?.() || Date.now());
+        const clientId = "file-" + (crypto.randomUUID?.() || Date.now());
 
         const optimistic = {
             clientId,
@@ -1111,40 +922,22 @@ const WhatsAppDashboard = () => {
 
         const uploadForm = new FormData();
         uploadForm.append("file", file);
-        uploadForm.append(
-            "conversationId",
-            convId
-        );
+        uploadForm.append("conversationId", convId);
         uploadForm.append("mime", mime);
 
         try {
-            const res = await fetch(
-                `${backendUrl}/messages/upload-media`,
-                {
-                    method: "POST",
-                    body: uploadForm,
-                }
-            );
-
-            if (!res.ok)
-                throw new Error(
-                    "Upload failed"
-                );
-
+            const res = await fetch(`${backendUrl}/messages/upload-media`, {
+                method: "POST",
+                body: uploadForm,
+            });
+            if (!res.ok) throw new Error("Upload failed");
             const data = await res.json();
 
             const serverMsg = {
-                id: data._id,
-                mediaUrl:
-                    data.mediaUrl ||
-                    data.url ||
-                    localUrl,
-                status:
-                    data.status || "sent",
-                timestamp:
-                    data.timestamp ||
-                    data.createdAt ||
-                    time,
+                id: data._id || undefined,
+                mediaUrl: data.mediaUrl || data.url || localUrl,
+                status: data.status || "sent",
+                timestamp: data.timestamp || data.createdAt || time,
             };
 
             dispatch({
@@ -1156,10 +949,7 @@ const WhatsAppDashboard = () => {
                 },
             });
         } catch (err) {
-            console.error(
-                "Upload failed:",
-                err
-            );
+            console.error("Upload media failed:", err);
             dispatch({
                 type: "UPSERT_MESSAGE",
                 payload: {
@@ -1176,57 +966,43 @@ const WhatsAppDashboard = () => {
     const handleEmojiSelect = (emoji) => {
         dispatch({
             type: "SET_COMPOSER",
-            payload:
-                (composerValue || "") + emoji,
+            payload: (composerValue || "") + emoji,
         });
         setShowEmojiPicker(false);
     };
 
-    const handleAddToContacts = async ({
-        id,
-        name,
-        phone,
-    }) => {
+    const handleAddToContacts = async ({ id, name, phone }) => {
         try {
-            const res = await fetch(
-                `${backendUrl}/contacts`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type":
-                            "application/json",
-                    },
-                    body: JSON.stringify({
-                        name: name || "Unknown",
-                        phone,
-                        tags: [],
-                        notes: "",
-                    }),
-                }
-            );
-            if (!res.ok)
-                throw new Error(
-                    "Failed to add contact"
-                );
+            const payload = {
+                name: name || "Unknown",
+                phone,
+                tags: [],
+                notes: "",
+            };
+
+            const res = await fetch(`${backendUrl}/contacts`, {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json",
+                },
+                body: JSON.stringify(payload),
+            });
+
+            if (!res.ok) {
+                throw new Error("Failed to add contact");
+            }
 
             const newContact = await res.json();
-            setContacts((prev) => [
-                ...prev,
-                newContact,
-            ]);
 
-            const key = normalizePhone(
-                newContact.phone
-            );
+            setContacts((prev) => [...prev, newContact]);
+
+            const key = normalizePhone(newContact.phone);
             setContactsMap((prevMap) => ({
                 ...prevMap,
                 [key]: newContact,
             }));
         } catch (err) {
-            console.error(
-                "Add contact error:",
-                err
-            );
+            console.error("Error adding to contacts:", err);
         }
     };
 
@@ -1243,111 +1019,34 @@ const WhatsAppDashboard = () => {
     const isCustomerTypingForActive =
         isCustomerTyping &&
         typingConversationId &&
-        String(typingConversationId) ===
-            String(activeConversationId);
+        String(typingConversationId) === String(activeConversationId);
 
-    /* ---------------------------------------------------
-         RENDER
-    --------------------------------------------------- */
+    const stats = ANALYTICS_STATS;
+    const messageVolume = MESSAGE_VOLUME;
+
     return (
-        <div className="relative h-screen bg-slate-950 text-white overflow-hidden">
+        <div className="flex h-screen bg-slate-950 text-slate-100">
+            <Sidebar
+                activeTab={activeTab}
+                onTabChange={handleTabChange}
+                sidebarOpen={sidebarOpen}
+                onToggleSidebar={handleToggleSidebar}
+                globalUnread={globalUnread}
+            />
 
-            {/* ⭐ MOBILE TOP BAR (Hamburger) */}
-            {isMobile && (
-                <div className="flex items-center justify-between p-3 border-b border-slate-800 bg-slate-900">
-                    <button
-                        className="p-2"
-                        onClick={() =>
-                            setMobileSidebarOpen(true)
-                        }
-                    >
-                        <Menu size={24} />
-                    </button>
-
-                    <h1 className="text-lg font-semibold">
-                        WhatsApp Interface
-                    </h1>
-
-                    <div style={{ width: 32 }} />
-                </div>
-            )}
-
-            {/* ⭐ SIDEBAR (desktop = static, mobile = overlay) */}
-            <div
-                className={`fixed top-0 left-0 h-full z-40 transition-transform duration-200
-                    ${
-                        isMobile
-                            ? mobileSidebarOpen
-                                ? "translate-x-0"
-                                : "-translate-x-full"
-                            : "translate-x-0"
-                    }
-                `}
-                style={{
-                    width: isMobile ? "85%" : 260,
-                    background: "#0f172a",
-                    borderRight: "1px solid #1e293b",
-                }}
-            >
-                {isMobile && (
-                    <div className="flex justify-end p-3 border-b border-slate-800">
-                        <button
-                            className="p-2"
-                            onClick={() =>
-                                setMobileSidebarOpen(false)
-                            }
-                        >
-                            <X size={24} />
-                        </button>
-                    </div>
-                )}
-
-                <Sidebar
-                    activeTab={activeTab}
-                    onTabChange={handleTabChange}
-                    sidebarOpen={true}
-                    onToggleSidebar={() => {}}
-                    globalUnread={globalUnread}
-                />
-            </div>
-
-            {/* ⭐ MOBILE OVERLAY BACKDROP */}
-            {isMobile && mobileSidebarOpen && (
-                <div
-                    onClick={() =>
-                        setMobileSidebarOpen(false)
-                    }
-                    className="fixed inset-0 bg-black/40 z-30"
-                />
-            )}
-
-            {/* ⭐ MAIN CONTENT */}
-            <div
-                className={`absolute top-0 right-0 h-full transition-all duration-200 ${
-                    isMobile
-                        ? "w-full"
-                        : "left-64 w-[calc(100%-260px)]"
-                }`}
-            >
+            <div className="flex-1 flex flex-col relative">
                 <audio
                     ref={notificationAudioRef}
                     src="/sounds/incoming-message.mp3"
                     preload="auto"
                 />
 
-                {/* ⭐ CHATS */}
                 {activeTab === "chats" && (
                     <div className="relative h-full">
                         <ChatLayout
-                            conversations={
-                                layoutConversations
-                            }
-                            activeConversationId={
-                                activeConversationId
-                            }
-                            onSelectConversation={
-                                handleSelectConversation
-                            }
+                            conversations={layoutConversations}
+                            activeConversationId={activeConversationId}
+                            onSelectConversation={handleSelectConversation}
                             messages={layoutMessages}
                             onSendMessage={handleSend}
                             composerValue={composerValue}
@@ -1358,45 +1057,24 @@ const WhatsAppDashboard = () => {
                                 })
                             }
                             onAttachClick={handleAttachClick}
-                            onEmojiClick={() =>
-                                setShowEmojiPicker((v) => !v)
-                            }
+                            onEmojiClick={() => setShowEmojiPicker((v) => !v)}
                             contactName={
-                                activeContact?.name ||
-                                activeConversation?.name
+                                activeContact?.name || activeConversation?.name
                             }
-                            contactPhone={
-                                activeConversation?.phone
-                            }
-                            hasMoreMessages={
-                                activePaging.hasMore
-                            }
-                            isLoadingMore={
-                                activePaging.loading
-                            }
-                            onLoadOlderMessages={
-                                handleLoadOlderMessages
-                            }
-                            onSearchChange={
-                                setConversationSearch
-                            }
-                            isCustomerTyping={
-                                isCustomerTypingForActive
-                            }
+                            contactPhone={activePhone}
+                            hasMoreMessages={activePaging.hasMore}
+                            isLoadingMore={activePaging.loading}
+                            onLoadOlderMessages={handleLoadOlderMessages}
+                            onSearchChange={setConversationSearch}
+                            isCustomerTyping={isCustomerTypingForActive}
                             customerTypingText="Customer is typing…"
                             contactStatus={contactStatus}
-                            onRetryMessage={
-                                handleRetryMessage
-                            }
-                            onAddToContacts={
-                                handleAddToContacts
-                            }
-                            isInContacts={
-                                !!activeContact
-                            }
+                            onRetryMessage={handleRetryMessage}
+                            onAddToContacts={handleAddToContacts}
+                            isInContacts={!!activeContact}
+                            onOpenContactDetails={handleOpenContactDetails}
                         />
 
-                        {/* File Upload */}
                         <input
                             type="file"
                             ref={fileInputRef}
@@ -1404,19 +1082,14 @@ const WhatsAppDashboard = () => {
                             onChange={handleFileSelected}
                         />
 
-                        {/* Emoji Picker */}
                         {showEmojiPicker && (
                             <div
                                 ref={emojiPickerRef}
                                 className="absolute bottom-16 right-4 z-50"
                             >
                                 <EmojiPicker
-                                    onEmojiClick={(
-                                        emojiData
-                                    ) =>
-                                        handleEmojiSelect(
-                                            emojiData.emoji
-                                        )
+                                    onEmojiClick={(emojiData) =>
+                                        handleEmojiSelect(emojiData.emoji)
                                     }
                                 />
                             </div>
@@ -1424,34 +1097,31 @@ const WhatsAppDashboard = () => {
                     </div>
                 )}
 
-                {/* ⭐ BROADCAST */}
-                {activeTab === "broadcast" && (
-                    <BroadcastView />
-                )}
+                {activeTab === "broadcast" && <BroadcastView />}
 
-                {/* ⭐ ANALYTICS */}
                 {activeTab === "analytics" && (
                     <AnalyticsView
-                        stats={ANALYTICS_STATS}
-                        messageVolume={MESSAGE_VOLUME}
+                        stats={stats}
+                        messageVolume={messageVolume}
                         maxVolume={maxVolume}
                     />
                 )}
 
-                {/* ⭐ CONTACTS */}
                 {activeTab === "contacts" && (
                     <ContactsView
-                        conversations={
-                            layoutConversations
-                        }
-                        onOpenContactDetails={() => {}}
+                        conversations={layoutConversations}
+                        onOpenContactDetails={handleOpenContactDetails}
                     />
                 )}
 
-                {/* ⭐ SETTINGS */}
-                {activeTab === "settings" && (
-                    <SettingsView />
+                {contactDetailsToShow && (
+                    <ContactsView
+                        initialDetails={contactDetailsToShow}
+                        onClose={() => setContactDetailsToShow(null)}
+                    />
                 )}
+
+                {activeTab === "settings" && <SettingsView />}
             </div>
         </div>
     );
