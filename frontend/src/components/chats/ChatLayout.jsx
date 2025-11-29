@@ -229,16 +229,11 @@ const ChatLayout = ({
     typeof window !== "undefined" &&
     window.innerWidth < 768;
 
+  // MOBILE: controls whether we're on "Inbox" or "Chat"
   const [showChatOnMobile, setShowChatOnMobile] = useState(false);
 
-  useEffect(() => {
-    if (activeConversationId && isMobile) {
-      setShowChatOnMobile(true);
-    }
-  }, [activeConversationId, isMobile]);
-
   /* ---------------------------------------------------
-       SCROLL ENGINE (AS BEFORE)
+       SCROLL ENGINE
   --------------------------------------------------- */
   const initialScrollDoneRef = useRef(false);
 
@@ -411,7 +406,7 @@ const ChatLayout = ({
   return (
     <div className="wa-shell">
 
-      {/* SIDEBAR (MOBILE = FULL SCREEN WHEN chat not visible) */}
+      {/* SIDEBAR (INBOX LIST) */}
       <aside
         className={
           "wa-sidebar " +
