@@ -1128,15 +1128,39 @@ const WhatsAppDashboard = () => {
     };
 
     return (
-        <div className="h-screen flex bg-gray-100">
-            <Sidebar
-                sidebarOpen={sidebarOpen}
-                setSidebarOpen={setSidebarOpen}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-            />
+        <div
+            className="
+            h-screen w-full bg-gray-100
+            flex
+            lg:flex-row
+            flex-col
+            overflow-hidden
+        "
+        >
+            {/* SIDEBAR — Desktop */}
+            <div className="hidden lg:block">
+                <Sidebar
+                    sidebarOpen={sidebarOpen}
+                    setSidebarOpen={setSidebarOpen}
+                    activeTab={activeTab}
+                    setActiveTab={setActiveTab}
+                />
+            </div>
 
-            <div className="flex-1 flex min-w-0">
+            {/* SIDEBAR — Mobile */}
+            {sidebarOpen && (
+                <div className="lg:hidden fixed inset-0 z-40 bg-white">
+                    <Sidebar
+                        sidebarOpen={sidebarOpen}
+                        setSidebarOpen={setSidebarOpen}
+                        activeTab={activeTab}
+                        setActiveTab={setActiveTab}
+                    />
+                </div>
+            )}
+
+            {/* MAIN CONTENT */}
+            <div className="flex-1 flex min-w-0 lg:ml-0">
                 {activeTab === "chats" && (
                     <div className="flex-1 min-w-0 relative">
                         <ChatLayout
@@ -1215,7 +1239,6 @@ const WhatsAppDashboard = () => {
                             );
 
                             if (!existing) {
-                                // No existing conversation yet; just go back to chats.
                                 setActiveTab("chats");
                                 return;
                             }
@@ -1268,7 +1291,7 @@ const WhatsAppDashboard = () => {
                         }}
                     />
                 )}
-                
+
                 {contactDetailsToShow && (
                     <ContactsView
                         initialDetails={contactDetailsToShow}
