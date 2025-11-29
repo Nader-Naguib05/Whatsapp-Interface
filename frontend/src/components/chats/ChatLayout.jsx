@@ -1,4 +1,10 @@
-import React, { useEffect, useRef, useState, useMemo } from "react";
+import React, {
+    useEffect,
+    useRef,
+    useState,
+    useMemo,
+    useCallback,
+} from "react";
 import {
     Search,
     MoreVertical,
@@ -53,7 +59,7 @@ function getMessageKey(msg, idx) {
 }
 
 /* ---------------------------------------------------
-   MESSAGE BUBBLE — Now perfectly aligned with CSS
+   MESSAGE BUBBLE
 --------------------------------------------------- */
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
@@ -82,6 +88,10 @@ function MessageBubble({ msg, onRetryMessage }) {
     const handleRetry = () => {
         if (isFailed && onRetryMessage) onRetryMessage(msg);
     };
+
+    const fullTimestampTitle = timestamp
+        ? new Date(timestamp).toLocaleString()
+        : "";
 
     return (
         <div
@@ -162,7 +172,10 @@ function MessageBubble({ msg, onRetryMessage }) {
 
                 {/* META (Time + Status) */}
                 <div className="wa-message-meta">
-                    <span className="wa-message-time">
+                    <span
+                        className="wa-message-time"
+                        title={fullTimestampTitle}
+                    >
                         {formatTime(timestamp)}
                     </span>
 
@@ -179,7 +192,9 @@ function MessageBubble({ msg, onRetryMessage }) {
                             )}
 
                             {status === "sent" && <Check size={14} />}
-                            {status === "delivered" && <CheckCheck size={14} />}
+                            {status === "delivered" && (
+                                <CheckCheck size={14} />
+                            )}
                             {status === "read" && (
                                 <CheckCheck
                                     size={14}
@@ -238,6 +253,11 @@ const ChatLayout = ({
 
     onAddToContacts,
     onOpenContactDetails,
+
+    // NEW (optional): handle templates & 24h rule & drag-drop
+    onSendTemplate,
+    isOutside24hWindow = false,
+    onDropFiles,
 }) => {
     const messagesRef = useRef(null);
     const bottomRef = useRef(null);
@@ -246,6 +266,29 @@ const ChatLayout = ({
 
     const [localSearch, setLocalSearch] = useState("");
     const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+    const [composerError, setComposerError] = useState("");
+    const [isDraggingFile, setIsDraggingFile] = useState(false);
+
+    const menuRef = useRef(null);
+
+    /* ---------------------------------------------------
+       CLOSE MENU WHEN CLICKING OUTSIDE
+    --------------------------------------------------- */
+    useEffect(() => {
+        function handleClickOutside(e) {
+            if (menuRef.current && !menuRef.current.contains(e.target)) {
+                setIsHeaderMenuOpen(false);
+            }
+        }
+
+        if (isHeaderMenuOpen) {
+            document.addEventListener("mousedown", handleClickOutside);
+        }
+
+        return () => {
+            document.removeEventListener("mousedown", handleClickOutside);
+        };
+    }, [isHeaderMenuOpen]);
 
     /* ---------------------------------------------------
        SCROLL BEHAVIOR
@@ -314,20 +357,55 @@ const ChatLayout = ({
     /* ---------------------------------------------------
        SEARCH
     --------------------------------------------------- */
-    const handleSearchChange = (e) => {
-        const v = e.target.value;
-        setLocalSearch(v);
-        onSearchChange?.(v);
-    };
+    const handleSearchChange = useCallback(
+        (e) => {
+            const v = e.target.value;
+            setLocalSearch(v);
+            onSearchChange?.(v);
+        },
+        [onSearchChange]
+    );
 
     /* ---------------------------------------------------
        SEND MSG
     --------------------------------------------------- */
-    const handleSend = () => {
+    const handleSend = useCallback(() => {
         const trimmed = (composerValue || "").trim();
         if (!trimmed) return;
-        onSendMessage(trimmed);
-    };
+
+        const isTemplateCommand = trimmed.startsWith("/");
+
+        // Outside 24h window: block free-form messages, allow templates
+        if (isOutside24hWindow && !isTemplateCommand) {
+            setComposerError(
+                "You can only send approved message templates outside the 24-hour Meta window. Use /templateName."
+            );
+            return;
+        }
+
+        setComposerError("");
+
+        if (isTemplateCommand) {
+            const templateName = trimmed.slice(1).trim();
+            if (templateName && onSendTemplate) {
+                onSendTemplate(templateName);
+            } else {
+                // Fallback: don't silently drop if parent hasn't implemented templates
+                onSendMessage(trimmed);
+            }
+        } else {
+            onSendMessage(trimmed);
+        }
+
+        // Clear composer locally (parent can also sync)
+        if (setComposerValue) setComposerValue("");
+    }, [
+        composerValue,
+        onSendMessage,
+        onSendTemplate,
+        isOutside24hWindow,
+        setComposerValue,
+    ]);
 
     const handleKeyDown = (e) => {
         if (e.key === "Enter" && !e.shiftKey) {
@@ -351,6 +429,33 @@ const ChatLayout = ({
     };
 
     /* ---------------------------------------------------
+       DRAG & DROP FILE UPLOAD
+    --------------------------------------------------- */
+    const handleDragOver = (e) => {
+        e.preventDefault();
+        if (
+            e.dataTransfer &&
+            Array.from(e.dataTransfer.types || []).includes("Files")
+        ) {
+            setIsDraggingFile(true);
+        }
+    };
+
+    const handleDragLeave = (e) => {
+        e.preventDefault();
+        setIsDraggingFile(false);
+    };
+
+    const handleDrop = (e) => {
+        e.preventDefault();
+        const files = Array.from(e.dataTransfer.files || []);
+        setIsDraggingFile(false);
+        if (files.length && onDropFiles) {
+            onDropFiles(files);
+        }
+    };
+
+    /* ---------------------------------------------------
        CURRENT CONVERSATION
     --------------------------------------------------- */
     const activeConversation =
@@ -364,6 +469,8 @@ const ChatLayout = ({
             : contactStatus === "offline"
             ? "Offline"
             : null;
+
+    const isOnline = contactStatus === "online";
 
     return (
         <div className="wa-shell">
@@ -444,7 +551,12 @@ const ChatLayout = ({
             </aside>
 
             {/* CHAT AREA */}
-            <section className="wa-chat-area">
+            <section
+                className="wa-chat-area"
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+            >
                 {activeConversation ? (
                     <>
                         {/* HEADER */}
@@ -456,13 +568,44 @@ const ChatLayout = ({
                                 </div>
                                 <div>
                                     <div className="wa-chat-title">
-                                        {contactName || activeConversation.name}
+                                        {contactName ||
+                                            activeConversation.name}
                                     </div>
                                     <div className="wa-chat-subtitle">
                                         {contactPhone}
                                         {statusBadge && (
-                                            <span className="wa-presence-badge">
-                                                • {statusBadge}
+                                            <span
+                                                className="wa-presence-badge"
+                                                style={{
+                                                    marginLeft: 8,
+                                                    display: "inline-flex",
+                                                    alignItems: "center",
+                                                    gap: 6,
+                                                    fontSize: 12,
+                                                    fontWeight: 500,
+                                                    color: isOnline
+                                                        ? "#16a34a"
+                                                        : "#6b7280",
+                                                }}
+                                            >
+                                                <span
+                                                    style={{
+                                                        width: 8,
+                                                        height: 8,
+                                                        borderRadius:
+                                                            "999px",
+                                                        backgroundColor:
+                                                            isOnline
+                                                                ? "#22c55e"
+                                                                : "#9ca3af",
+                                                        boxShadow: isOnline
+                                                            ? "0 0 0 4px rgba(34,197,94,0.35)"
+                                                            : "none",
+                                                        transition:
+                                                            "all 150ms ease-out",
+                                                    }}
+                                                />
+                                                {statusBadge}
                                             </span>
                                         )}
                                     </div>
@@ -474,6 +617,7 @@ const ChatLayout = ({
                                 <div
                                     className="wa-header-menu-wrapper"
                                     style={{ position: "relative" }}
+                                    ref={menuRef}
                                 >
                                     <button
                                         type="button"
@@ -499,6 +643,11 @@ const ChatLayout = ({
                                                     "0 4px 12px rgba(0,0,0,0.12), 0 1px 2px rgba(0,0,0,0.08)",
                                                 zIndex: 50,
                                                 minWidth: "160px",
+                                                opacity: 1,
+                                                transform: "scale(1)",
+                                                transformOrigin: "top right",
+                                                transition:
+                                                    "opacity 120ms ease-out, transform 120ms ease-out",
                                             }}
                                         >
                                             {/* ADD TO CONTACTS */}
@@ -561,7 +710,9 @@ const ChatLayout = ({
                                                     fontSize: "13px",
                                                 }}
                                                 onClick={() => {
-                                                    setIsHeaderMenuOpen(false);
+                                                    setIsHeaderMenuOpen(
+                                                        false
+                                                    );
                                                     navigator.clipboard.writeText(
                                                         contactPhone ||
                                                             activeConversation.phone
@@ -576,12 +727,50 @@ const ChatLayout = ({
                             </div>
                         </header>
 
+                        {/* ERROR STRIP FOR 24H WINDOW */}
+                        {composerError && (
+                            <div
+                                className="wa-composer-error"
+                                style={{
+                                    color: "#b91c1c",
+                                    fontSize: 12,
+                                    padding: "4px 12px 0",
+                                }}
+                            >
+                                {composerError}
+                            </div>
+                        )}
+
                         {/* MESSAGES */}
                         <div
                             className="wa-chat-messages"
                             ref={messagesRef}
                             onScroll={handleScroll}
+                            style={{ position: "relative" }}
                         >
+                            {isDraggingFile && (
+                                <div
+                                    style={{
+                                        position: "absolute",
+                                        inset: 0,
+                                        background:
+                                            "rgba(0,0,0,0.35)",
+                                        border:
+                                            "2px dashed rgba(255,255,255,0.6)",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        pointerEvents: "none",
+                                        zIndex: 20,
+                                        color: "white",
+                                        fontSize: "14px",
+                                        fontWeight: 500,
+                                    }}
+                                >
+                                    Drop files to upload
+                                </div>
+                            )}
+
                             {isLoadingMore && hasMoreMessages && (
                                 <div className="wa-loading-more">
                                     Loading...
@@ -642,9 +831,10 @@ const ChatLayout = ({
                                 placeholder="Type a message"
                                 value={composerValue}
                                 rows={1}
-                                onChange={(e) =>
-                                    setComposerValue(e.target.value)
-                                }
+                                onChange={(e) => {
+                                    setComposerError("");
+                                    setComposerValue(e.target.value);
+                                }}
                                 onKeyDown={handleKeyDown}
                             />
 
