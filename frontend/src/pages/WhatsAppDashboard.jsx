@@ -244,12 +244,14 @@ const WhatsAppDashboard = () => {
     const typingTimeoutRef = useRef(null);
 
     const [isMobile, setIsMobile] = useState(false);
+    const [mobileView, setMobileView] = useState("inbox");
+    // "sidebar" | "inbox" | "chat"
 
     useEffect(() => {
-        const check = () => setIsMobile(window.innerWidth < 768);
-        check();
-        window.addEventListener("resize", check);
-        return () => window.removeEventListener("resize", check);
+        const update = () => setIsMobile(window.innerWidth < 768);
+        update();
+        window.addEventListener("resize", update);
+        return () => window.removeEventListener("resize", update);
     }, []);
 
     const [state, dispatch] = useReducer(reducer, initialState);
@@ -1137,177 +1139,167 @@ const WhatsAppDashboard = () => {
     };
 
     return (
-        <div
-            className="
-            h-screen w-full bg-gray-100
-            flex
-            lg:flex-row
-            flex-col
-            overflow-hidden
-        "
-        >
-            {/* DESKTOP SIDEBAR */}
-            {!isMobile && (
-                <Sidebar
-                    sidebarOpen={sidebarOpen}
-                    setSidebarOpen={setSidebarOpen}
-                    activeTab={activeTab}
-                    setActiveTab={setActiveTab}
-                />
+        <div className="h-screen w-full bg-gray-100 overflow-hidden">
+            {/* ---------- MOBILE ---------- */}
+            {isMobile && (
+                <>
+                    {/* SIDEBAR (full screen) */}
+                    {mobileView === "sidebar" && (
+                        <Sidebar
+                            sidebarOpen={true}
+                            setSidebarOpen={() => setMobileView("inbox")}
+                            activeTab={activeTab}
+                            setActiveTab={(tab) => {
+                                setActiveTab(tab);
+                                if (tab === "chats") setMobileView("inbox");
+                            }}
+                        />
+                    )}
+
+                    {/* INBOX (conversation list) */}
+                    {mobileView === "inbox" && (
+                        <ChatLayout
+                            conversations={layoutConversations}
+                            activeConversationId={activeConversationId}
+                            onSelectConversation={(id) => {
+                                handleSelectConversation(id);
+                                setMobileView("chat");
+                            }}
+                            messages={[]}
+                            composerValue=""
+                            setComposerValue={() => {}}
+                            onSendMessage={() => {}}
+                            onAttachClick={() => {}}
+                            onEmojiClick={() => {}}
+                            isMobileInbox={true}
+                        />
+                    )}
+
+                    {/* CHAT */}
+                    {mobileView === "chat" && (
+                        <div className="relative h-full">
+                            <button
+                                onClick={() => setMobileView("inbox")}
+                                className="absolute top-3 left-3 z-50 bg-white p-2 rounded-full shadow"
+                            >
+                                <svg width="22" height="22" viewBox="0 0 24 24">
+                                    <path
+                                        d="M15 18l-6-6 6-6"
+                                        stroke="black"
+                                        strokeWidth="2"
+                                        fill="none"
+                                    />
+                                </svg>
+                            </button>
+
+                            <ChatLayout
+                                conversations={layoutConversations}
+                                activeConversationId={activeConversationId}
+                                onSelectConversation={(id) => {
+                                    handleSelectConversation(id);
+                                }}
+                                messages={layoutMessages}
+                                onSendMessage={handleSend}
+                                composerValue={composerValue}
+                                setComposerValue={(v) =>
+                                    dispatch({
+                                        type: "SET_COMPOSER",
+                                        payload: v,
+                                    })
+                                }
+                                onAttachClick={handleAttachClick}
+                                onEmojiClick={() =>
+                                    setShowEmojiPicker((v) => !v)
+                                }
+                                contactName={
+                                    activeContact?.name ||
+                                    activeConversation?.name
+                                }
+                                contactPhone={activePhone}
+                                hasMoreMessages={activePaging.hasMore}
+                                isLoadingMore={activePaging.loading}
+                                onLoadOlderMessages={handleLoadOlderMessages}
+                                onSearchChange={setConversationSearch}
+                                isCustomerTyping={isCustomerTyping}
+                                customerTypingText="Customer is typing…"
+                                contactStatus={contactStatus}
+                                onRetryMessage={handleRetryMessage}
+                                onAddToContacts={handleAddToContacts}
+                                isInContacts={!!activeContact}
+                                onOpenContactDetails={handleOpenContactDetails}
+                            />
+                        </div>
+                    )}
+                </>
             )}
 
-            {/* MOBILE SIDEBAR (full screen drawer) */}
-            {isMobile && sidebarOpen && (
-                <div className="fixed inset-0 z-40 bg-white overflow-y-auto">
+            {/* ---------- DESKTOP ---------- */}
+            {!isMobile && (
+                <div className="h-full w-full flex">
                     <Sidebar
                         sidebarOpen={sidebarOpen}
                         setSidebarOpen={setSidebarOpen}
                         activeTab={activeTab}
                         setActiveTab={setActiveTab}
                     />
+
+                    <div className="flex-1 min-w-0">
+                        {/* tabs */}
+                        {activeTab === "chats" && (
+                            <ChatLayout
+                                conversations={layoutConversations}
+                                activeConversationId={activeConversationId}
+                                onSelectConversation={handleSelectConversation}
+                                messages={layoutMessages}
+                                onSendMessage={handleSend}
+                                composerValue={composerValue}
+                                setComposerValue={(v) =>
+                                    dispatch({
+                                        type: "SET_COMPOSER",
+                                        payload: v,
+                                    })
+                                }
+                                onAttachClick={handleAttachClick}
+                                onEmojiClick={() =>
+                                    setShowEmojiPicker((v) => !v)
+                                }
+                                contactName={
+                                    activeContact?.name ||
+                                    activeConversation?.name
+                                }
+                                contactPhone={activePhone}
+                                hasMoreMessages={activePaging.hasMore}
+                                isLoadingMore={activePaging.loading}
+                                onLoadOlderMessages={handleLoadOlderMessages}
+                                onSearchChange={setConversationSearch}
+                                isCustomerTyping={isCustomerTyping}
+                                customerTypingText="Customer is typing…"
+                                contactStatus={contactStatus}
+                                onRetryMessage={handleRetryMessage}
+                                onAddToContacts={handleAddToContacts}
+                                isInContacts={!!activeContact}
+                                onOpenContactDetails={handleOpenContactDetails}
+                            />
+                        )}
+
+                        {activeTab === "broadcast" && <BroadcastView />}
+                        {activeTab === "analytics" && (
+                            <AnalyticsView
+                                stats={ANALYTICS_STATS}
+                                messageVolume={MESSAGE_VOLUME}
+                                maxVolume={maxVolume}
+                            />
+                        )}
+                        {activeTab === "contacts" && (
+                            <ContactsView
+                                onSelectContact={(contact) => {}}
+                                onContactsChange={(list) => {}}
+                            />
+                        )}
+                        {activeTab === "settings" && <SettingsView />}
+                    </div>
                 </div>
             )}
-
-            {/* MAIN CONTENT */}
-            <div className="flex-1 flex min-w-0">
-                {activeTab === "chats" && (
-                    <div className="flex-1 min-w-0 relative">
-                        <ChatLayout
-                            conversations={layoutConversations}
-                            activeConversationId={activeConversationId}
-                            onSelectConversation={handleSelectConversation}
-                            messages={layoutMessages}
-                            onSendMessage={handleSend}
-                            composerValue={composerValue}
-                            setComposerValue={(v) =>
-                                dispatch({
-                                    type: "SET_COMPOSER",
-                                    payload: v,
-                                })
-                            }
-                            onAttachClick={handleAttachClick}
-                            onEmojiClick={() => setShowEmojiPicker((v) => !v)}
-                            contactName={
-                                activeContact?.name || activeConversation?.name
-                            }
-                            contactPhone={activePhone}
-                            hasMoreMessages={activePaging.hasMore}
-                            isLoadingMore={activePaging.loading}
-                            onLoadOlderMessages={handleLoadOlderMessages}
-                            onSearchChange={setConversationSearch}
-                            isCustomerTyping={isCustomerTyping}
-                            customerTypingText="Customer is typing…"
-                            contactStatus={contactStatus}
-                            onRetryMessage={handleRetryMessage}
-                            onAddToContacts={handleAddToContacts}
-                            isInContacts={!!activeContact}
-                            onOpenContactDetails={handleOpenContactDetails}
-                        />
-
-                        <input
-                            type="file"
-                            ref={fileInputRef}
-                            style={{ display: "none" }}
-                            onChange={handleFileSelected}
-                        />
-
-                        {showEmojiPicker && (
-                            <div className="absolute bottom-16 right-4 z-50">
-                                <EmojiPicker
-                                    onEmojiClick={(emojiData) =>
-                                        handleEmojiSelect(emojiData.emoji)
-                                    }
-                                />
-                            </div>
-                        )}
-                    </div>
-                )}
-
-                {activeTab === "broadcast" && <BroadcastView />}
-                {activeTab === "analytics" && (
-                    <AnalyticsView
-                        stats={ANALYTICS_STATS}
-                        messageVolume={MESSAGE_VOLUME}
-                        maxVolume={maxVolume}
-                    />
-                )}
-                {activeTab === "contacts" && (
-                    <ContactsView
-                        onSelectContact={(contact) => {
-                            if (!contact?.phone) {
-                                setActiveTab("chats");
-                                return;
-                            }
-
-                            const existing = conversations.find(
-                                (c) =>
-                                    normalizePhone(c.phone) ===
-                                    normalizePhone(contact.phone)
-                            );
-
-                            if (!existing) {
-                                setActiveTab("chats");
-                                return;
-                            }
-
-                            const id = String(existing.id || existing._id);
-
-                            dispatch({
-                                type: "UPSERT_CONVERSATION_TOP",
-                                payload: {
-                                    conversationId: id,
-                                    data: {
-                                        id,
-                                        _id: existing._id,
-                                        name:
-                                            contact.name ||
-                                            existing.name ||
-                                            existing.displayName ||
-                                            contact.phone,
-                                        phone: contact.phone || existing.phone,
-                                        lastMessage: existing.lastMessage || "",
-                                        lastMessageAt:
-                                            existing.lastMessageAt ||
-                                            existing.updatedAt ||
-                                            existing.createdAt ||
-                                            new Date().toISOString(),
-                                        unread: 0,
-                                        unreadCount: 0,
-                                    },
-                                },
-                            });
-
-                            setActiveTab("chats");
-                            dispatch({
-                                type: "SET_ACTIVE_CONVERSATION",
-                                payload: id,
-                            });
-                        }}
-                        onContactsChange={(list) => {
-                            setContacts(list || []);
-                            const map = {};
-                            (list || []).forEach((c) => {
-                                if (c.phone) {
-                                    const key = normalizePhone(c.phone);
-                                    if (key) {
-                                        map[key] = c;
-                                    }
-                                }
-                            });
-                            setContactsMap(map);
-                        }}
-                    />
-                )}
-
-                {contactDetailsToShow && (
-                    <ContactsView
-                        initialDetails={contactDetailsToShow}
-                        onClose={() => setContactDetailsToShow(null)}
-                    />
-                )}
-
-                {activeTab === "settings" && <SettingsView />}
-            </div>
         </div>
     );
 };
