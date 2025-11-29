@@ -13,6 +13,7 @@ import {
   Send,
   Check,
   CheckCheck,
+  ArrowLeft,
   AlertCircle,
   FileText,
 } from "lucide-react";
@@ -20,7 +21,7 @@ import {
 import "../../styles/wa-chat.css";
 
 /* ---------------------------------------------------
-   UTILS
+   UTILITIES
 --------------------------------------------------- */
 function formatTime(ts) {
   if (!ts) return "";
@@ -83,10 +84,6 @@ function MessageBubble({ msg, onRetryMessage }) {
   const isDocument =
     mediaUrl && !isImage && !isVideo && !isAudio;
 
-  const fullTimestampTitle = timestamp
-    ? new Date(timestamp).toLocaleString()
-    : "";
-
   return (
     <div
       className={
@@ -104,7 +101,6 @@ function MessageBubble({ msg, onRetryMessage }) {
             : "wa-message-bubble--incoming")
         }
       >
-        {/* MEDIA */}
         {mediaUrl && (
           <div className="wa-message-media">
             {isSending && (
@@ -159,27 +155,16 @@ function MessageBubble({ msg, onRetryMessage }) {
           </div>
         )}
 
-        {/* TEXT */}
         {text && <div className="wa-message-text">{text}</div>}
 
-        {/* META */}
-        <div
-          className="wa-message-meta"
-          title={fullTimestampTitle}
-        >
-          <span className="wa-message-time">
-            {formatTime(timestamp)}
-          </span>
+        <div className="wa-message-meta" title={timestamp}>
+          <span className="wa-message-time">{formatTime(timestamp)}</span>
 
           {isOutgoing && (
             <span className="wa-message-status">
-              {status === "sending" && (
-                <span className="wa-sending-dot"></span>
-              )}
+              {status === "sending" && <span className="wa-sending-dot"></span>}
               {status === "sent" && <Check size={14} />}
-              {status === "delivered" && (
-                <CheckCheck size={14} />
-              )}
+              {status === "delivered" && <CheckCheck size={14} />}
               {status === "read" && (
                 <CheckCheck
                   size={14}
@@ -203,7 +188,7 @@ function MessageBubble({ msg, onRetryMessage }) {
 }
 
 /* ---------------------------------------------------
-   MAIN LAYOUT
+       MAIN CHAT LAYOUT
 --------------------------------------------------- */
 const ChatLayout = ({
   conversations = [],
@@ -240,38 +225,22 @@ const ChatLayout = ({
   const messagesRef = useRef(null);
   const bottomRef = useRef(null);
 
-  const initialScrollDoneRef = useRef(false);
-  const [localSearch, setLocalSearch] = useState("");
+  const isMobile =
+    typeof window !== "undefined" &&
+    window.innerWidth < 768;
 
-  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
-  const menuRef = useRef(null);
+  const [showChatOnMobile, setShowChatOnMobile] = useState(false);
 
-  /* ---------------------------------------------------
-     CLOSE MENU WHEN CLICKING OUTSIDE
-  --------------------------------------------------- */
   useEffect(() => {
-    function handleClickOutside(e) {
-      if (
-        menuRef.current &&
-        !menuRef.current.contains(e.target)
-      ) {
-        setIsHeaderMenuOpen(false);
-      }
+    if (activeConversationId && isMobile) {
+      setShowChatOnMobile(true);
     }
-
-    if (isHeaderMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside);
-    }
-    return () =>
-      document.removeEventListener(
-        "mousedown",
-        handleClickOutside
-      );
-  }, [isHeaderMenuOpen]);
+  }, [activeConversationId, isMobile]);
 
   /* ---------------------------------------------------
-     SCROLL ENGINE — WhatsApp-grade
+       SCROLL ENGINE (AS BEFORE)
   --------------------------------------------------- */
+  const initialScrollDoneRef = useRef(false);
 
   const scrollToBottom = useCallback((behavior = "auto") => {
     bottomRef.current?.scrollIntoView({
@@ -280,10 +249,8 @@ const ChatLayout = ({
     });
   }, []);
 
-  /* -------- Initial scroll when switching conversations -------- */
   useEffect(() => {
     if (!messages.length) return;
-
     initialScrollDoneRef.current = false;
 
     const forceScroll = () => {
@@ -296,7 +263,6 @@ const ChatLayout = ({
     setTimeout(forceScroll, 120);
   }, [activeConversationId, messages.length, scrollToBottom]);
 
-  /* -------- Auto-scroll on new messages -------- */
   useEffect(() => {
     if (!initialScrollDoneRef.current) return;
 
@@ -304,15 +270,13 @@ const ChatLayout = ({
     if (!el) return;
 
     const nearBottom =
-      el.scrollHeight - el.scrollTop - el.clientHeight <
-      150;
+      el.scrollHeight - el.scrollTop - el.clientHeight < 150;
 
     if (nearBottom) {
       scrollToBottom("smooth");
     }
   }, [messages, scrollToBottom]);
 
-  /* -------- Load older messages when scrolling up -------- */
   const handleScroll = () => {
     const el = messagesRef.current;
     if (!el) return;
@@ -324,7 +288,6 @@ const ChatLayout = ({
     }
   };
 
-  /* -------- Fix layout shifts (images, separators) -------- */
   useEffect(() => {
     if (!messagesRef.current) return;
 
@@ -334,10 +297,7 @@ const ChatLayout = ({
       if (!initialScrollDoneRef.current) return;
 
       const nearBottom =
-        el.scrollHeight -
-          el.scrollTop -
-          el.clientHeight <
-        150;
+        el.scrollHeight - el.scrollTop - el.clientHeight < 150;
 
       if (nearBottom) {
         scrollToBottom("smooth");
@@ -349,7 +309,7 @@ const ChatLayout = ({
   }, [scrollToBottom]);
 
   /* ---------------------------------------------------
-     GROUP BY DAY
+       GROUP MESSAGES BY DAY
   --------------------------------------------------- */
   const groupedByDay = useMemo(() => {
     const result = [];
@@ -357,16 +317,16 @@ const ChatLayout = ({
 
     messages.forEach((msg, idx) => {
       const ts = msg.timestamp || msg.time || msg.createdAt;
-      const dayLabel = formatDayLabel(ts);
+      const day = formatDayLabel(ts);
 
       const baseId = getMessageKey(msg, idx);
 
-      if (dayLabel !== currentDay) {
-        currentDay = dayLabel;
+      if (day !== currentDay) {
+        currentDay = day;
         result.push({
           type: "day",
-          id: `day-${dayLabel}-${baseId}`,
-          label: dayLabel,
+          id: `day-${day}-${baseId}`,
+          label: day,
         });
       }
 
@@ -381,8 +341,10 @@ const ChatLayout = ({
   }, [messages]);
 
   /* ---------------------------------------------------
-     SEARCH
+       SEARCH
   --------------------------------------------------- */
+  const [localSearch, setLocalSearch] = useState("");
+
   const handleSearchChange = (e) => {
     const v = e.target.value;
     setLocalSearch(v);
@@ -390,12 +352,11 @@ const ChatLayout = ({
   };
 
   /* ---------------------------------------------------
-     SEND MESSAGE
+       SEND MESSAGE
   --------------------------------------------------- */
   const handleSend = () => {
     const trimmed = composerValue?.trim();
     if (!trimmed) return;
-
     onSendMessage(trimmed);
   };
 
@@ -409,8 +370,7 @@ const ChatLayout = ({
   const activeConversation =
     conversations.find(
       (c) =>
-        String(c._id || c.id) ===
-        String(activeConversationId)
+        String(c._id || c.id) === String(activeConversationId)
     ) || null;
 
   const statusBadge =
@@ -420,10 +380,48 @@ const ChatLayout = ({
       ? "Offline"
       : null;
 
+  /* ---------------------------------------------------
+       DROPDOWN
+  --------------------------------------------------- */
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    function close(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setIsMenuOpen(false);
+      }
+    }
+    if (isMenuOpen) {
+      document.addEventListener("mousedown", close);
+    }
+    return () => document.removeEventListener("mousedown", close);
+  }, [isMenuOpen]);
+
+  /* ---------------------------------------------------
+       MOBILE BACK BUTTON
+  --------------------------------------------------- */
+  const handleBack = () => {
+    setShowChatOnMobile(false);
+  };
+
+  /* ---------------------------------------------------
+       RENDER
+  --------------------------------------------------- */
   return (
     <div className="wa-shell">
-      {/* SIDEBAR */}
-      <aside className="wa-sidebar">
+
+      {/* SIDEBAR (MOBILE = FULL SCREEN WHEN chat not visible) */}
+      <aside
+        className={
+          "wa-sidebar " +
+          (isMobile
+            ? showChatOnMobile
+              ? "wa-mobile-hidden"
+              : "wa-mobile-visible"
+            : "")
+        }
+      >
         <div className="wa-sidebar-header">
           <h1 className="wa-app-title">Inbox</h1>
         </div>
@@ -441,12 +439,13 @@ const ChatLayout = ({
 
         <div className="wa-conversation-list">
           {conversations.map((conv) => {
-            const convId = conv._id || conv.id;
+            const id = conv._id || conv.id;
             const name =
               conv.name ||
               conv.displayName ||
               conv.phone ||
               "Unknown";
+
             const lastMsg = conv.lastMessage || "";
             const lastAt =
               conv.lastMessageAt ||
@@ -457,15 +456,17 @@ const ChatLayout = ({
 
             return (
               <button
-                key={convId}
+                key={id}
+                onClick={() => {
+                  onSelectConversation(id);
+                  if (isMobile) setShowChatOnMobile(true);
+                }}
                 className={
                   "wa-conversation-item" +
-                  (String(convId) ===
-                  String(activeConversationId)
+                  (String(id) === String(activeConversationId)
                     ? " wa-conversation-item--active"
                     : "")
                 }
-                onClick={() => onSelectConversation(convId)}
               >
                 <div className="wa-avatar">{name[0]}</div>
 
@@ -497,9 +498,27 @@ const ChatLayout = ({
       </aside>
 
       {/* CHAT AREA */}
-      <section className="wa-chat-area">
+      <section
+        className={
+          "wa-chat-area " +
+          (isMobile
+            ? showChatOnMobile
+              ? "wa-mobile-visible"
+              : "wa-mobile-hidden"
+            : "")
+        }
+      >
         {activeConversation ? (
           <>
+            {/* MOBILE BACK BUTTON */}
+            {isMobile && (
+              <div className="wa-mobile-back-btn">
+                <button onClick={handleBack}>
+                  <ArrowLeft size={20} />
+                </button>
+              </div>
+            )}
+
             {/* HEADER */}
             <header className="wa-chat-header">
               <div className="wa-chat-header-left">
@@ -512,97 +531,70 @@ const ChatLayout = ({
                     {contactName ||
                       activeConversation.name}
                   </div>
-                  <div className="wa-chat-subtitle">
-                    {contactPhone}
-                    {statusBadge && (
-                      <span className="wa-presence-badge">
-                        • {statusBadge}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
 
-              <div className="wa-chat-header-actions">
-                <div
-                  className="wa-header-menu-wrapper"
-                  style={{ position: "relative" }}
-                  ref={menuRef}
-                >
-                  <button
-                    className="wa-icon-button"
-                    onClick={() =>
-                      setIsHeaderMenuOpen((o) => !o)
-                    }
-                  >
-                    <MoreVertical size={18} />
-                  </button>
-
-                  {isHeaderMenuOpen && (
-                    <div
-                      className="wa-header-menu"
-                      style={{
-                        position: "absolute",
-                        top: "110%",
-                        right: 0,
-                        background: "white",
-                        borderRadius: 8,
-                        padding: "6px 0",
-                        boxShadow:
-                          "0 4px 10px rgba(0,0,0,0.15)",
-                        zIndex: 50,
-                        width: 160,
-                        animation:
-                          "fadeScaleIn 110ms ease-out",
-                      }}
-                    >
-                      {!isInContacts ? (
-                        <button
-                          className="wa-header-menu-item"
-                          style={{
-                            textAlign: "left",
-                            width: "100%",
-                            padding: "8px 14px",
-                            fontSize: 13,
-                          }}
-                          onClick={() => {
-                            setIsHeaderMenuOpen(false);
-                            onAddToContacts?.({
-                              id: activeConversationId,
-                              name:
-                                contactName ||
-                                activeConversation.name,
-                              phone:
-                                contactPhone ||
-                                activeConversation.phone,
-                            });
-                          }}
-                        >
-                          Add to contacts
-                        </button>
-                      ) : (
-                        <button
-                          className="wa-header-menu-item"
-                          style={{
-                            textAlign: "left",
-                            width: "100%",
-                            padding: "8px 14px",
-                            fontSize: 13,
-                          }}
-                          onClick={() => {
-                            setIsHeaderMenuOpen(false);
-                            navigator.clipboard.writeText(
-                              contactPhone ||
-                                activeConversation.phone
-                            );
-                          }}
-                        >
-                          Copy number
-                        </button>
+                  {!isMobile && (
+                    <div className="wa-chat-subtitle">
+                      {contactPhone}
+                      {statusBadge && (
+                        <span className="wa-presence-badge">
+                          • {statusBadge}
+                        </span>
                       )}
                     </div>
                   )}
+
+                  {isMobile && statusBadge && (
+                    <div className="wa-chat-subtitle">
+                      {statusBadge}
+                    </div>
+                  )}
                 </div>
+              </div>
+
+              <div className="wa-chat-header-actions" ref={menuRef}>
+                <button
+                  className="wa-icon-button"
+                  onClick={() => setIsMenuOpen((o) => !o)}
+                >
+                  <MoreVertical size={18} />
+                </button>
+
+                {isMenuOpen && (
+                  <div className="wa-header-menu">
+                    {!isInContacts ? (
+                      <button
+                        className="wa-header-menu-item"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          onAddToContacts?.({
+                            id: activeConversationId,
+                            name:
+                              contactName ||
+                              activeConversation.name,
+                            phone:
+                              contactPhone ||
+                              activeConversation.phone,
+                          });
+                        }}
+                      >
+                        Add to contacts
+                      </button>
+                    ) : (
+                      <button
+                        className="wa-header-menu-item"
+                        onClick={() => {
+                          setIsMenuOpen(false);
+                          navigator.clipboard.writeText(
+                            contactPhone ||
+                              activeConversation.phone
+                          );
+                        }}
+                      >
+                        Copy number
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </header>
 
@@ -614,7 +606,7 @@ const ChatLayout = ({
             >
               {isLoadingMore && hasMoreMessages && (
                 <div className="wa-loading-more">
-                  Loading...
+                  Loading…
                 </div>
               )}
 

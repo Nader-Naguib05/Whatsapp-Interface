@@ -563,3 +563,136 @@
   box-shadow: 0 1px 2px rgba(0,0,0,0.12),
               0 1px 4px rgba(0,0,0,0.08);
 }
+
+/* ---------------------------------------------------
+   MOBILE RESPONSIVE LAYOUT
+   Breakpoint: 768px
+--------------------------------------------------- */
+
+@media (max-width: 768px) {
+  /* Shell becomes stacked layout */
+  .wa-shell {
+    display: block !important;
+    width: 100%;
+    height: 100vh;
+  }
+
+  /* -------------------------
+     SIDEBAR BEHAVIOR
+  ------------------------- */
+  .wa-sidebar {
+    width: 100% !important;
+    max-width: none;
+    height: 100vh !important;
+    position: absolute;
+    top: 0;
+    left: 0;
+    background: var(--wa-bg);
+    z-index: 20;
+    transition: transform 0.25s ease;
+  }
+
+  .wa-mobile-visible {
+    transform: translateX(0);
+  }
+
+  .wa-mobile-hidden {
+    transform: translateX(-100%);
+  }
+
+  /* -------------------------
+     CHAT AREA (FULL SCREEN)
+  ------------------------- */
+  .wa-chat-area {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100vh !important;
+    width: 100% !important;
+    background: var(--wa-bg);
+    z-index: 30;
+    transition: transform 0.25s ease;
+  }
+
+  .wa-chat-area.wa-mobile-visible {
+    transform: translateX(0);
+  }
+
+  .wa-chat-area.wa-mobile-hidden {
+    transform: translateX(100%);
+  }
+
+  /* -------------------------
+     MOBILE BACK BUTTON
+  ------------------------- */
+  .wa-mobile-back-btn {
+    height: 50px;
+    display: flex;
+    align-items: center;
+    padding-left: 6px;
+  }
+
+  .wa-mobile-back-btn button {
+    background: transparent;
+    border: none;
+    padding: 8px 12px;
+    border-radius: 50%;
+  }
+
+  /* -------------------------
+     HEADER
+  ------------------------- */
+  .wa-chat-header {
+    height: 60px !important;
+    padding: 8px 10px;
+    gap: 10px;
+  }
+
+  .wa-chat-title {
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  .wa-chat-subtitle {
+    font-size: 12px;
+    opacity: 0.7;
+  }
+
+  /* -------------------------
+     MESSAGES
+  ------------------------- */
+  .wa-chat-messages {
+    padding: 10px !important;
+  }
+
+  .wa-message-row {
+    padding: 2px 0;
+  }
+
+  /* Full-width bubbles on mobile */
+  .wa-message-bubble {
+    max-width: 90% !important;
+  }
+
+  /* -------------------------
+     COMPOSER
+  ------------------------- */
+  .wa-chat-composer {
+    height: 60px !important;
+    padding: 8px 10px !important;
+  }
+
+  .wa-composer-input {
+    font-size: 14px;
+    padding: 7px 10px;
+  }
+
+  /* -------------------------
+     DROPDOWN MENU
+  ------------------------- */
+  .wa-header-menu {
+    right: 5px !important;
+    top: 55px !important;
+    width: 150px !important;
+  }
+}
