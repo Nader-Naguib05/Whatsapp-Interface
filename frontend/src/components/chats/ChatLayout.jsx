@@ -1,6 +1,3 @@
-/* FULL CODE BLOCK STARTS BELOW */
-/* Everything here is final, clean, optimized, and follows your exact rules. */
-
 import React, {
   useEffect,
   useRef,
@@ -273,47 +270,83 @@ const ChatLayout = ({
   }, [isHeaderMenuOpen]);
 
   /* ---------------------------------------------------
-     SCROLL FIX — ALWAYS START AT BOTTOM
+     SCROLL ENGINE — WhatsApp-grade
   --------------------------------------------------- */
+
+  const scrollToBottom = useCallback((behavior = "auto") => {
+    bottomRef.current?.scrollIntoView({
+      behavior,
+      block: "end",
+    });
+  }, []);
+
+  /* -------- Initial scroll when switching conversations -------- */
   useEffect(() => {
     if (!messages.length) return;
 
-    const scrollToBottom = () => {
-      bottomRef.current?.scrollIntoView({
-        behavior: "auto",
-        block: "end",
-      });
+    initialScrollDoneRef.current = false;
+
+    const forceScroll = () => {
+      scrollToBottom("auto");
+      initialScrollDoneRef.current = true;
     };
 
-    // Fix: wait for DOM to paint
-    requestAnimationFrame(() => {
-      scrollToBottom();
-      setTimeout(scrollToBottom, 30);
-      setTimeout(scrollToBottom, 120);
-    });
+    requestAnimationFrame(forceScroll);
+    setTimeout(forceScroll, 40);
+    setTimeout(forceScroll, 120);
+  }, [activeConversationId, messages.length, scrollToBottom]);
 
-    initialScrollDoneRef.current = true;
-  }, [activeConversationId]);
-
-  /* ---------------------------------------------------
-     SCROLL ON NEW MESSAGES
-  --------------------------------------------------- */
+  /* -------- Auto-scroll on new messages -------- */
   useEffect(() => {
-    if (!messages.length) return;
+    if (!initialScrollDoneRef.current) return;
 
-    const container = messagesRef.current;
+    const el = messagesRef.current;
+    if (!el) return;
+
     const nearBottom =
-      container.scrollHeight -
-        container.scrollTop -
-        container.clientHeight <
-      120;
+      el.scrollHeight - el.scrollTop - el.clientHeight <
+      150;
 
     if (nearBottom) {
-      bottomRef.current?.scrollIntoView({
-        behavior: "smooth",
-      });
+      scrollToBottom("smooth");
     }
-  }, [messages]);
+  }, [messages, scrollToBottom]);
+
+  /* -------- Load older messages when scrolling up -------- */
+  const handleScroll = () => {
+    const el = messagesRef.current;
+    if (!el) return;
+
+    if (el.scrollTop <= 40) {
+      if (!isLoadingMore && hasMoreMessages) {
+        onLoadOlderMessages?.();
+      }
+    }
+  };
+
+  /* -------- Fix layout shifts (images, separators) -------- */
+  useEffect(() => {
+    if (!messagesRef.current) return;
+
+    const el = messagesRef.current;
+
+    const ro = new ResizeObserver(() => {
+      if (!initialScrollDoneRef.current) return;
+
+      const nearBottom =
+        el.scrollHeight -
+          el.scrollTop -
+          el.clientHeight <
+        150;
+
+      if (nearBottom) {
+        scrollToBottom("smooth");
+      }
+    });
+
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [scrollToBottom]);
 
   /* ---------------------------------------------------
      GROUP BY DAY
@@ -370,20 +403,6 @@ const ChatLayout = ({
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
-    }
-  };
-
-  /* ---------------------------------------------------
-     LOAD PREVIOUS MESSAGES
-  --------------------------------------------------- */
-  const handleScroll = () => {
-    const el = messagesRef.current;
-    if (!el) return;
-
-    if (el.scrollTop <= 40) {
-      if (!isLoadingMore && hasMoreMessages) {
-        onLoadOlderMessages?.();
-      }
     }
   };
 
@@ -683,5 +702,3 @@ const ChatLayout = ({
 };
 
 export default ChatLayout;
-
-/* END OF FILE */
