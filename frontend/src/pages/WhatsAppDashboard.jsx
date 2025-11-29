@@ -243,6 +243,15 @@ const WhatsAppDashboard = () => {
     const hasWindowFocusRef = useRef(true);
     const typingTimeoutRef = useRef(null);
 
+    const [isMobile, setIsMobile] = useState(false);
+
+    useEffect(() => {
+        const check = () => setIsMobile(window.innerWidth < 768);
+        check();
+        window.addEventListener("resize", check);
+        return () => window.removeEventListener("resize", check);
+    }, []);
+
     const [state, dispatch] = useReducer(reducer, initialState);
     const {
         conversations,
@@ -1137,19 +1146,19 @@ const WhatsAppDashboard = () => {
             overflow-hidden
         "
         >
-            {/* SIDEBAR — Desktop */}
-            <div className="hidden lg:block">
+            {/* DESKTOP SIDEBAR */}
+            {!isMobile && (
                 <Sidebar
                     sidebarOpen={sidebarOpen}
                     setSidebarOpen={setSidebarOpen}
                     activeTab={activeTab}
                     setActiveTab={setActiveTab}
                 />
-            </div>
+            )}
 
-            {/* SIDEBAR — Mobile */}
-            {sidebarOpen && (
-                <div className="lg:hidden fixed inset-0 z-40 bg-white">
+            {/* MOBILE SIDEBAR (full screen drawer) */}
+            {isMobile && sidebarOpen && (
+                <div className="fixed inset-0 z-40 bg-white overflow-y-auto">
                     <Sidebar
                         sidebarOpen={sidebarOpen}
                         setSidebarOpen={setSidebarOpen}
@@ -1160,7 +1169,7 @@ const WhatsAppDashboard = () => {
             )}
 
             {/* MAIN CONTENT */}
-            <div className="flex-1 flex min-w-0 lg:ml-0">
+            <div className="flex-1 flex min-w-0">
                 {activeTab === "chats" && (
                     <div className="flex-1 min-w-0 relative">
                         <ChatLayout
@@ -1215,7 +1224,6 @@ const WhatsAppDashboard = () => {
                 )}
 
                 {activeTab === "broadcast" && <BroadcastView />}
-
                 {activeTab === "analytics" && (
                     <AnalyticsView
                         stats={ANALYTICS_STATS}
@@ -1223,7 +1231,6 @@ const WhatsAppDashboard = () => {
                         maxVolume={maxVolume}
                     />
                 )}
-
                 {activeTab === "contacts" && (
                     <ContactsView
                         onSelectContact={(contact) => {
