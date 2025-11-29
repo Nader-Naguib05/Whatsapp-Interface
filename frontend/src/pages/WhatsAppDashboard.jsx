@@ -29,30 +29,38 @@ const initialState = {
     messagesByConv: {}, // { [convId]: Message[] }
     activeConversationId: null,
     composerValue: "",
-    messagePagingByConv: {},
+    messagePagingByConv: {}, // { [convId]: { cursor, hasMore, loading } }
 };
 
-// Given a conversationId -> array of messages, insert/merge a new message
-function upsertMessageInArray(prevArray, newMsg) {
-    let existsIndex = -1;
+function getMessageKey(m) {
+    return m.msgId || m.id || m._id || m.clientId;
+}
 
-    if (newMsg.clientId) {
-        existsIndex = prevArray.findIndex(
-            (m) => m.clientId && m.clientId === newMsg.clientId
-        );
+function prependMessages(existing, incoming) {
+    if (!incoming || incoming.length === 0) return existing || [];
+    const existingKeys = new Set(
+        (existing || []).map((m) => getMessageKey(m)).filter(Boolean)
+    );
+    const result = [];
+    for (const msg of incoming) {
+        const key = getMessageKey(msg);
+        if (key && existingKeys.has(key)) continue;
+        result.push(msg);
     }
+    return [...result, ...(existing || [])];
+}
 
-    if (existsIndex === -1 && newMsg.id) {
-        existsIndex = prevArray.findIndex((m) => m.id === newMsg.id);
-    }
+function upsertMessageInArray(arr, msg) {
+    const idx = arr.findIndex((m) => {
+        const mk = getMessageKey(m);
+        const nk = getMessageKey(msg);
+        return mk && nk && mk === nk;
+    });
+    if (idx === -1) return [...arr, msg];
 
-    if (existsIndex === -1) {
-        return [...prevArray, newMsg];
-    } else {
-        const updated = [...prevArray];
-        updated[existsIndex] = { ...updated[existsIndex], ...newMsg };
-        return updated;
-    }
+    const copy = [...arr];
+    copy[idx] = { ...copy[idx], ...msg };
+    return copy;
 }
 
 function reducer(state, action) {
@@ -60,49 +68,19 @@ function reducer(state, action) {
         case "SET_CONVERSATIONS":
             return {
                 ...state,
-                conversations: action.payload,
+                conversations: action.payload || [],
             };
-
-        case "UPSERT_CONVERSATION_TOP": {
-            const { conversationId, data } = action.payload;
-            const convIdStr = String(conversationId);
-
-            const filtered = state.conversations.filter(
-                (c) => String(c.id) !== convIdStr
-            );
-
-            return {
-                ...state,
-                conversations: [
-                    {
-                        ...data,
-                        id: convIdStr,
-                    },
-                    ...filtered,
-                ],
-            };
-        }
-
-        case "UPDATE_CONVERSATION_UNREAD": {
-            const { conversationId, unreadCount } = action.payload;
-            return {
-                ...state,
-                conversations: state.conversations.map((c) =>
-                    String(c.id) === String(conversationId)
-                        ? {
-                              ...c,
-                              unread: unreadCount,
-                              unreadCount,
-                          }
-                        : c
-                ),
-            };
-        }
 
         case "SET_ACTIVE_CONVERSATION":
             return {
                 ...state,
                 activeConversationId: action.payload,
+            };
+
+        case "SET_COMPOSER":
+            return {
+                ...state,
+                composerValue: action.payload,
             };
 
         case "SET_MESSAGES_FOR_CONV": {
@@ -111,7 +89,7 @@ function reducer(state, action) {
                 ...state,
                 messagesByConv: {
                     ...state.messagesByConv,
-                    [conversationId]: messages,
+                    [conversationId]: messages || [],
                 },
             };
         }
@@ -119,33 +97,17 @@ function reducer(state, action) {
         case "PREPEND_MESSAGES_FOR_CONV": {
             const { conversationId, messages } = action.payload;
             const prev = state.messagesByConv[conversationId] || [];
+            const merged = prependMessages(prev, messages);
             return {
                 ...state,
                 messagesByConv: {
                     ...state.messagesByConv,
-                    [conversationId]: [...messages, ...prev],
+                    [conversationId]: merged,
                 },
             };
         }
 
-        case "SET_PAGING_FOR_CONV": {
-            const { conversationId, paging } = action.payload;
-            return {
-                ...state,
-                messagePagingByConv: {
-                    ...state.messagePagingByConv,
-                    [conversationId]: paging,
-                },
-            };
-        }
-
-        case "SET_COMPOSER":
-            return {
-                ...state,
-                composerValue: action.payload,
-            };
-
-        case "OPTIMISTIC_APPEND_MESSAGE": {
+        case "ADD_LOCAL_MESSAGE": {
             const { conversationId, message } = action.payload;
             const prev = state.messagesByConv[conversationId] || [];
             return {
@@ -186,17 +148,69 @@ function reducer(state, action) {
             };
         }
 
-        case "BULK_MARK_MESSAGES_READ": {
-            const { conversationId } = action.payload;
+        case "UPDATE_MESSAGE_STATUS": {
+            const { conversationId, messageId, status } = action.payload;
             const prev = state.messagesByConv[conversationId] || [];
-            const updated = prev.map((m) =>
-                m.fromMe ? m : { ...m, status: "read" }
-            );
+            const updated = prev.map((m) => {
+                const same =
+                    m.msgId === messageId ||
+                    m.clientId === messageId ||
+                    m.id === messageId ||
+                    m._id === messageId;
+                if (!same) return m;
+                return { ...m, status };
+            });
             return {
                 ...state,
                 messagesByConv: {
                     ...state.messagesByConv,
                     [conversationId]: updated,
+                },
+            };
+        }
+
+        case "UPDATE_CONVERSATION_META": {
+            const { conversationId, patch } = action.payload;
+            return {
+                ...state,
+                conversations: state.conversations.map((c) =>
+                    String(c.id) === String(conversationId)
+                        ? { ...c, ...patch }
+                        : c
+                ),
+            };
+        }
+
+        // put conversation at top (for new messages or newly created)
+        case "UPSERT_CONVERSATION_TOP": {
+            const { conversationId, data } = action.payload;
+            const idStr = String(conversationId);
+            const existing = state.conversations.find(
+                (c) => String(c.id) === idStr
+            );
+            const base = existing || { id: idStr, ...data };
+            const merged = { ...base, ...data };
+
+            const others = state.conversations.filter(
+                (c) => String(c.id) !== idStr
+            );
+
+            return {
+                ...state,
+                conversations: [merged, ...others],
+            };
+        }
+
+        case "SET_MESSAGE_PAGING": {
+            const { conversationId, meta } = action.payload;
+            return {
+                ...state,
+                messagePagingByConv: {
+                    ...state.messagePagingByConv,
+                    [conversationId]: {
+                        ...(state.messagePagingByConv[conversationId] || {}),
+                        ...meta,
+                    },
                 },
             };
         }
@@ -213,8 +227,6 @@ const WhatsAppDashboard = () => {
     const prevChatRef = useRef(null);
     const fileInputRef = useRef(null);
     const [showEmojiPicker, setShowEmojiPicker] = useState(false);
-
-    const emojiPickerRef = useRef(null);
 
     // contacts state + map
     const [contacts, setContacts] = useState([]);
@@ -241,24 +253,23 @@ const WhatsAppDashboard = () => {
     } = state;
 
     const activeConversation =
-        conversations.find((c) => String(c.id) === String(activeConversationId)) ||
-        null;
+        conversations.find(
+            (c) => String(c.id) === String(activeConversationId || "")
+        ) || null;
 
-    const activeMessages = activeConversationId
-        ? messagesByConv[String(activeConversationId)] || []
-        : [];
+    const activePhone = activeConversation?.phone;
+    const activePhoneKey = normalizePhone(activePhone);
+    const activeContact =
+        activePhoneKey && contactsMap[activePhoneKey]
+            ? contactsMap[activePhoneKey]
+            : null;
 
-    const activePaging = activeConversationId
-        ? messagePagingByConv[String(activeConversationId)] || {
-              hasMore: false,
-              loading: false,
-              cursor: null,
-          }
-        : {
-              hasMore: false,
-              loading: false,
-              cursor: null,
-          };
+    const activeMessages = messagesByConv[activeConversationId] || [];
+    const activePaging = messagePagingByConv[activeConversationId] || {
+        cursor: null,
+        hasMore: false,
+        loading: false,
+    };
 
     const [contactDetailsToShow, setContactDetailsToShow] = useState(null);
 
@@ -266,28 +277,6 @@ const WhatsAppDashboard = () => {
         if (!activeContact) return;
         setContactDetailsToShow(activeContact);
     };
-
-    // --- emoji picker outside click close ---
-    useEffect(() => {
-        if (!showEmojiPicker) return;
-        const handleEmojiOutside = (e) => {
-            if (
-                emojiPickerRef.current &&
-                !emojiPickerRef.current.contains(e.target)
-            ) {
-                setShowEmojiPicker(false);
-            }
-        };
-        document.addEventListener("mousedown", handleEmojiOutside);
-        return () => {
-            document.removeEventListener("mousedown", handleEmojiOutside);
-        };
-    }, [showEmojiPicker]);
-
-    // --- auto close emoji picker on tab / conversation change ---
-    useEffect(() => {
-        setShowEmojiPicker(false);
-    }, [activeTab, activeConversationId]);
 
     // --- window focus tracking for smarter notifications ---
     useEffect(() => {
@@ -306,128 +295,132 @@ const WhatsAppDashboard = () => {
         };
     }, []);
 
-    // If window is not focused, we can bump unread or update tab title, etc.
+    // --- notification sound setup (place file at /public/sounds/new-message.mp3) ---
     useEffect(() => {
-        if (!document) return;
-        if (!globalUnread) {
-            document.title = "WhatsApp Interface";
+        if (typeof Audio === "undefined") return;
+        try {
+            notificationAudioRef.current = new Audio("/sounds/new-message.mp3");
+        } catch {
+            notificationAudioRef.current = null;
+        }
+    }, []);
+
+    const triggerNewMessageNotification = () => {
+        const audio = notificationAudioRef.current;
+        if (!audio) return;
+        if (!hasWindowFocusRef.current) {
+            audio.play().catch(() => {
+                // ignore autoplay errors
+            });
+        }
+    };
+
+    // --- global unread + dynamic document title ---
+    useEffect(() => {
+        const total =
+            (conversations || []).reduce(
+                (sum, c) => sum + (c.unreadCount || c.unread || 0),
+                0
+            ) || 0;
+        setGlobalUnread(total);
+    }, [conversations]);
+
+    useEffect(() => {
+        if (typeof document === "undefined") return;
+        const baseTitle = "WhatsApp Inbox";
+        if (globalUnread > 0) {
+            document.title = `(${globalUnread}) ${baseTitle}`;
         } else {
-            document.title = `(${globalUnread}) WhatsApp Interface`;
+            document.title = baseTitle;
         }
     }, [globalUnread]);
 
-    // local pointer to current backend
-    const backendUrl = BACKEND || "http://localhost:5000";
-
-    // load contacts
-    useEffect(() => {
-        const fetchContacts = async () => {
-            try {
-                const res = await fetch(`${backendUrl}/contacts`);
-                if (!res.ok) throw new Error("Failed to load contacts");
-                const data = await res.json();
-                setContacts(data || []);
-
-                const map = {};
-                (data || []).forEach((c) => {
+    // --- reusable load contacts (initial + after changes) ---
+    const loadContacts = async () => {
+        try {
+            const res = await fetch(`${BACKEND}/contacts`);
+            if (!res.ok) throw new Error("Failed to fetch contacts");
+            const data = await res.json();
+            setContacts(data || []);
+            const map = {};
+            (data || []).forEach((c) => {
+                if (c.phone) {
                     const key = normalizePhone(c.phone);
-                    if (key) map[key] = c;
-                });
-                setContactsMap(map);
-            } catch (err) {
-                console.error("Error fetching contacts:", err);
-            }
-        };
-        fetchContacts();
-    }, [backendUrl]);
+                    if (key) {
+                        map[key] = c;
+                    }
+                }
+            });
+            setContactsMap(map);
+        } catch (err) {
+            console.error("Failed to load contacts:", err);
+        }
+    };
 
-    // figure out active contact
-    const activePhone = activeConversation?.phone || "";
-    const normalizedActivePhone = normalizePhone(activePhone);
-    const activeContact =
-        normalizedActivePhone && contactsMap[normalizedActivePhone]
-            ? contactsMap[normalizedActivePhone]
-            : null;
-
-    // load initial conversations
+    // load contacts once on mount
     useEffect(() => {
-        let cancelled = false;
-        (async () => {
-            try {
-                const convs = await getConversations(backendUrl);
-                if (cancelled) return;
+        loadContacts();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
-                const normalized = convs.map((c) => {
-                    const key = normalizePhone(c.phone);
-                    const contact = key && contactsMap[key] ? contactsMap[key] : null;
-                    const name =
-                        (contact && contact.name) ||
-                        c.name ||
-                        c.displayName ||
-                        c.phone ||
-                        "Unknown";
+    // --- socket setup ---
+    useEffect(() => {
+        const s = createSocket();
+        setSocket(s);
 
-                    return {
-                        id: String(c._id || c.id),
-                        _id: c._id,
-                        name,
-                        displayName: c.displayName || c.name || name,
-                        phone: c.phone,
-                        lastMessage: c.lastMessage || "",
-                        lastMessageAt:
-                            c.lastMessageAt ||
-                            c.updatedAt ||
-                            c.createdAt ||
-                            new Date().toISOString(),
-                        unread: c.unreadCount || c.unread || 0,
-                        unreadCount: c.unreadCount || c.unread || 0,
-                    };
-                });
-
-                normalized.sort(
-                    (a, b) =>
-                        new Date(b.lastMessageAt).getTime() -
-                        new Date(a.lastMessageAt).getTime()
-                );
-
-                dispatch({ type: "SET_CONVERSATIONS", payload: normalized });
-
-                const totalUnread = normalized.reduce(
-                    (sum, c) => sum + (c.unreadCount || 0),
-                    0
-                );
-                setGlobalUnread(totalUnread);
-            } catch (err) {
-                console.error("Failed to load conversations:", err);
-            }
-        })();
+        s.on("connect", () => console.log("Socket connected:", s.id));
+        s.on("disconnect", () => console.log("Socket disconnected"));
 
         return () => {
-            cancelled = true;
+            s.disconnect();
         };
-    }, [backendUrl, contactsMap]);
+    }, []);
 
-    // load messages for active conversation
-    const loadMessagesPage = async (conversationId, cursor = null, replace = false) => {
+    // join / leave active conversation room
+    useEffect(() => {
+        if (!socket || !activeConversationId) return;
+
+        if (
+            prevChatRef.current &&
+            prevChatRef.current !== activeConversationId
+        ) {
+            socket.emit("leaveConversation", prevChatRef.current);
+        }
+
+        socket.emit("joinConversation", activeConversationId);
+        prevChatRef.current = activeConversationId;
+    }, [socket, activeConversationId]);
+
+    // ALSO join all known conversations so sidebar gets updates
+    useEffect(() => {
+        if (!socket) return;
+        conversations.forEach((c) => {
+            const id = String(c.id);
+            socket.emit("joinConversation", id);
+        });
+    }, [socket, conversations]);
+
+    // helper to load a page of messages
+    const loadMessagesPage = async (
+        conversationId,
+        cursor,
+        replace = false
+    ) => {
         if (!conversationId) return;
-        try {
-            dispatch({
-                type: "SET_PAGING_FOR_CONV",
-                payload: {
-                    conversationId,
-                    paging: {
-                        ...(messagePagingByConv[conversationId] || {}),
-                        loading: true,
-                    },
-                },
-            });
 
-            const res = await getConversationMessages(
-                backendUrl,
+        dispatch({
+            type: "SET_MESSAGE_PAGING",
+            payload: {
                 conversationId,
-                PAGE_SIZE,
-                cursor
-            );
+                meta: { loading: true },
+            },
+        });
+
+        try {
+            const res = await getConversationMessages(conversationId, {
+                cursor,
+                limit: PAGE_SIZE,
+            });
 
             let msgs = [];
             let nextCursor = null;
@@ -463,31 +456,313 @@ const WhatsAppDashboard = () => {
             }
 
             dispatch({
-                type: "SET_PAGING_FOR_CONV",
+                type: "SET_MESSAGE_PAGING",
                 payload: {
                     conversationId,
-                    paging: {
-                        hasMore,
-                        cursor: nextCursor,
+                    meta: {
                         loading: false,
+                        cursor: nextCursor,
+                        hasMore,
                     },
                 },
             });
         } catch (err) {
-            console.error("Failed to load messages:", err);
+            console.error("loadMessagesPage failed:", err);
             dispatch({
-                type: "SET_PAGING_FOR_CONV",
+                type: "SET_MESSAGE_PAGING",
                 payload: {
                     conversationId,
-                    paging: {
-                        ...(messagePagingByConv[conversationId] || {}),
-                        loading: false,
-                    },
+                    meta: { loading: false },
                 },
             });
         }
     };
 
+    // socket events (messages, statuses, typing, presence)
+    useEffect(() => {
+        if (!socket) return;
+
+        const handleNewMessage = ({ conversation, message: raw }) => {
+            if (!conversation || !raw) return;
+
+            const convId = String(conversation._id || conversation.id);
+            const senderType = raw.senderType || raw.sender || "customer";
+
+            const uiMsg = {
+                id: raw._id,
+                clientId: raw.clientId || undefined,
+                conversationId: convId,
+                text: raw.body,
+                body: raw.body,
+                mediaUrl: raw.mediaUrl,
+                senderType,
+                fromMe: senderType === "agent",
+                from: senderType === "agent" ? "business" : "customer",
+                timestamp: raw.createdAt,
+                status:
+                    raw.status ||
+                    (senderType === "agent" ? "sent" : "received"),
+                msgId: raw.msgId,
+            };
+
+            dispatch({
+                type: "UPSERT_MESSAGE",
+                payload: { conversationId: convId, msg: uiMsg },
+            });
+
+            const isActive = String(activeConversationId) === convId;
+            const computedUnread =
+                conversation.unreadCount ?? conversation.unread ?? 1;
+
+            dispatch({
+                type: "UPSERT_CONVERSATION_TOP",
+                payload: {
+                    conversationId: convId,
+                    data: {
+                        id: convId,
+                        _id: conversation._id,
+                        name:
+                            conversation.name ||
+                            conversation.displayName ||
+                            conversation.phone ||
+                            "Unknown",
+                        phone: conversation.phone,
+                        lastMessage: uiMsg.text,
+                        lastMessageAt: uiMsg.timestamp,
+                        unread: isActive ? 0 : computedUnread,
+                        unreadCount: isActive ? 0 : computedUnread,
+                    },
+                },
+            });
+
+            const isCustomer =
+                senderType !== "agent" &&
+                senderType !== "business" &&
+                !uiMsg.fromMe;
+
+            if (isCustomer && (!isActive || !hasWindowFocusRef.current)) {
+                triggerNewMessageNotification();
+            }
+        };
+
+        const handleMessageAck = (serverMsg) => {
+            const convId = String(serverMsg.conversationId || serverMsg.chatId);
+            const clientId = serverMsg.clientId;
+            if (!convId || !clientId) return;
+
+            const uiMsg = {
+                id: serverMsg._id,
+                clientId,
+                conversationId: convId,
+                text: serverMsg.body,
+                body: serverMsg.body,
+                mediaUrl: serverMsg.mediaUrl,
+                senderType: serverMsg.senderType || "agent",
+                fromMe: true,
+                from: "business",
+                timestamp: serverMsg.createdAt,
+                status: serverMsg.status || "sent",
+                msgId: serverMsg.msgId,
+            };
+
+            dispatch({
+                type: "SERVER_ACK_MESSAGE",
+                payload: {
+                    conversationId: convId,
+                    clientId,
+                    serverMsg: uiMsg,
+                },
+            });
+
+            dispatch({
+                type: "UPSERT_CONVERSATION_TOP",
+                payload: {
+                    conversationId: convId,
+                    data: {
+                        lastMessage: uiMsg.text,
+                        lastMessageAt: uiMsg.timestamp,
+                    },
+                },
+            });
+        };
+
+        const handleMessageStatus = ({ conversationId, messageId, status }) => {
+            const convId = String(conversationId);
+            if (!convId || !messageId || !status) return;
+
+            dispatch({
+                type: "UPDATE_MESSAGE_STATUS",
+                payload: {
+                    conversationId: convId,
+                    messageId,
+                    status,
+                },
+            });
+        };
+
+        const handleConversationCreated = (conversation) => {
+            if (!conversation) return;
+            const convId = String(conversation._id || conversation.id);
+            if (!convId) return;
+
+            dispatch({
+                type: "UPSERT_CONVERSATION_TOP",
+                payload: {
+                    conversationId: convId,
+                    data: {
+                        id: convId,
+                        _id: conversation._id,
+                        name:
+                            conversation.name ||
+                            conversation.displayName ||
+                            conversation.phone ||
+                            "Unknown",
+                        phone: conversation.phone,
+                        lastMessage: conversation.lastMessage || "",
+                        lastMessageAt:
+                            conversation.lastMessageAt ||
+                            conversation.updatedAt ||
+                            conversation.createdAt ||
+                            new Date().toISOString(),
+                        unread:
+                            conversation.unreadCount ||
+                            conversation.unread ||
+                            0,
+                        unreadCount:
+                            conversation.unreadCount ||
+                            conversation.unread ||
+                            0,
+                    },
+                },
+            });
+        };
+
+        const handleCustomerTyping = ({ conversationId }) => {
+            const convId = String(conversationId);
+            if (!convId) return;
+
+            setTypingConversationId(convId);
+
+            if (String(activeConversationId) === convId) {
+                setIsCustomerTyping(true);
+            }
+
+            if (typingTimeoutRef.current) {
+                clearTimeout(typingTimeoutRef.current);
+            }
+            typingTimeoutRef.current = setTimeout(() => {
+                setIsCustomerTyping(false);
+                setTypingConversationId(null);
+            }, 3000);
+        };
+
+        const handleContactStatus = ({ conversationId, status }) => {
+            const convId = String(conversationId);
+            if (!convId) return;
+
+            dispatch({
+                type: "UPDATE_CONVERSATION_META",
+                payload: {
+                    conversationId: convId,
+                    patch: { contactStatus: status },
+                },
+            });
+
+            if (String(activeConversationId) === convId) {
+                setContactStatus(
+                    status === "online" || status === "offline" ? status : null
+                );
+            }
+        };
+
+        socket.on("newMessage", handleNewMessage);
+        socket.on("messageAck", handleMessageAck);
+        socket.on("messageStatus", handleMessageStatus);
+        socket.on("conversation:new", handleConversationCreated);
+        socket.on("conversationCreated", handleConversationCreated);
+        socket.on("customerTyping", handleCustomerTyping);
+        socket.on("contactStatus", handleContactStatus);
+
+        return () => {
+            socket.off("newMessage", handleNewMessage);
+            socket.off("messageAck", handleMessageAck);
+            socket.off("messageStatus", handleMessageStatus);
+            socket.off("conversation:new", handleConversationCreated);
+            socket.off("conversationCreated", handleConversationCreated);
+            socket.off("customerTyping", handleCustomerTyping);
+            socket.off("contactStatus", handleContactStatus);
+        };
+    }, [socket, activeConversationId]);
+
+    // --- keep header presence in sync when switching convs ---
+    useEffect(() => {
+        if (!activeConversationId) {
+            setContactStatus(null);
+            return;
+        }
+        const conv = conversations.find(
+            (c) => String(c.id) === String(activeConversationId)
+        );
+        setContactStatus(conv?.contactStatus || null);
+    }, [activeConversationId, conversations]);
+
+    // --- sync typing indicator to current conversation ---
+    useEffect(() => {
+        if (
+            typingConversationId &&
+            String(typingConversationId) === String(activeConversationId)
+        ) {
+            setIsCustomerTyping(true);
+        } else {
+            setIsCustomerTyping(false);
+        }
+    }, [typingConversationId, activeConversationId]);
+
+    // --- fetch conversations on mount ---
+    useEffect(() => {
+        const load = async () => {
+            try {
+                const data = await getConversations();
+
+                const normalized = (data || []).map((c) => {
+                    const id = String(c._id || c.id);
+                    return {
+                        ...c,
+                        id,
+                        name: c.name || c.displayName || c.phone || "Unknown",
+                        phone: c.phone,
+                        lastMessage: c.lastMessage || "",
+                        lastMessageAt:
+                            c.lastMessageAt || c.updatedAt || c.createdAt,
+                        unread: c.unreadCount || c.unread || 0,
+                        unreadCount: c.unreadCount || c.unread || 0,
+                    };
+                });
+
+                dispatch({
+                    type: "SET_CONVERSATIONS",
+                    payload: normalized,
+                });
+
+                if (normalized.length > 0) {
+                    const firstId = normalized[0].id;
+                    dispatch({
+                        type: "SET_ACTIVE_CONVERSATION",
+                        payload: firstId,
+                    });
+
+                    loadMessagesPage(firstId, null, true);
+                }
+            } catch (err) {
+                console.error("getConversations failed:", err);
+            }
+        };
+
+        load();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    // fetch messages when active chat changes
     useEffect(() => {
         if (!activeConversationId) return;
         loadMessagesPage(String(activeConversationId), null, true);
@@ -518,280 +793,119 @@ const WhatsAppDashboard = () => {
         () =>
             filteredConversations.map((c) => ({
                 id: String(c.id),
-                name: c.name || c.displayName || c.phone || "Unknown",
+                _id: c._id,
+                name: c.name,
                 phone: c.phone,
-                lastMessage: c.lastMessage || "",
+                lastMessage: c.lastMessage,
                 lastMessageAt: c.lastMessageAt,
                 unread: c.unreadCount || c.unread || 0,
+                initials: (c.name || c.phone || "?").slice(0, 2).toUpperCase(),
+                contactStatus: c.contactStatus,
             })),
         [filteredConversations]
     );
 
-    const layoutMessages = useMemo(() => {
-        return (activeMessages || []).map((raw) => {
-            if (raw.uiNormalized) return raw;
+    const layoutMessages = useMemo(
+        () =>
+            activeMessages.map((m) => ({
+                id: m.id || m._id,
+                clientId: m.clientId,
+                text: m.text || m.body,
+                body: m.text || m.body,
+                timestamp: m.timestamp || m.time || m.createdAt,
+                senderType: m.senderType || m.sender,
+                fromMe: m.fromMe,
+                from: m.from,
+                status: m.status || "sent",
+                mediaUrl: m.mediaUrl,
+                mediaType: m.mediaType,
+                msgId: m.msgId,
+                fileName: m.fileName || m.filename,
+            })),
+        [activeMessages]
+    );
 
-            const conversation =
-                conversations.find(
-                    (c) =>
-                        String(c.id) ===
-                        String(raw.conversationId || raw.conversation || activeConversationId)
-                ) || activeConversation;
+    const handleSelectConversation = async (convId) => {
+        const idStr = String(convId);
 
-            const convId = String(conversation._id || conversation.id);
-            const senderType = raw.senderType || raw.sender || "customer";
-
-            const uiMsg = {
-                id: raw._id,
-                clientId: raw.clientId || undefined,
-                conversationId: convId,
-                text: raw.body,
-                body: raw.body,
-                mediaUrl: raw.mediaUrl,
-                senderType,
-                fromMe: senderType === "agent",
-                from: senderType === "agent" ? "business" : "customer",
-                status: raw.status || "sent",
-                timestamp: raw.timestamp || raw.createdAt || raw.updatedAt,
-                uiNormalized: true,
-            };
-            return uiMsg;
-        });
-    }, [
-        activeMessages,
-        conversations,
-        activeConversation,
-        activeConversationId,
-    ]);
-
-    // socket connection
-    useEffect(() => {
-        const s = createSocket(backendUrl);
-
-        s.on("connect", () => {
-            console.log("Socket connected");
+        dispatch({
+            type: "SET_ACTIVE_CONVERSATION",
+            payload: idStr,
         });
 
-        s.on("disconnect", () => {
-            console.log("Socket disconnected");
+        dispatch({
+            type: "UPDATE_CONVERSATION_META",
+            payload: {
+                conversationId: idStr,
+                patch: { unread: 0, unreadCount: 0 },
+            },
         });
 
-        s.on("message:new", (payload) => {
-            if (!payload) return;
-            const { conversation, message } = payload;
+        try {
+            await fetch(`${BACKEND}/conversations/reset-unread`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ conversationId: idStr }),
+            });
+        } catch (e) {
+            console.error("Failed to reset unread:", e);
+        }
+    };
 
-            const convId = String(conversation._id || conversation.id);
-            const senderType = message.senderType || message.sender || "customer";
+    const handleSend = (textFromLayout) => {
+        const content = (textFromLayout ?? composerValue).trim();
+        if (!content || !activeConversationId) return;
 
-            // 1) upsert conversation at top
+        const convId = String(activeConversation?.id || activeConversationId);
+        const time = new Date().toISOString();
+
+        const clientId =
+            "tmp-" + (crypto.randomUUID ? crypto.randomUUID() : Date.now());
+
+        const optimisticMessage = {
+            clientId,
+            conversationId: convId,
+            text: content,
+            body: content,
+            senderType: "agent",
+            fromMe: true,
+            from: "business",
+            timestamp: time,
+            status: "sending",
+        };
+
+        if (!activeConversation) {
             dispatch({
                 type: "UPSERT_CONVERSATION_TOP",
                 payload: {
                     conversationId: convId,
                     data: {
                         id: convId,
-                        _id: conversation._id,
-                        name:
-                            conversation.name ||
-                            conversation.displayName ||
-                            conversation.phone ||
-                            "Unknown",
-                        phone: conversation.phone,
-                        lastMessage: message.body || "",
-                        lastMessageAt:
-                            message.timestamp ||
-                            message.createdAt ||
-                            new Date().toISOString(),
-                        unread:
-                            convId === String(activeConversationId)
-                                ? 0
-                                : (conversation.unreadCount || 0) + 1,
-                        unreadCount:
-                            convId === String(activeConversationId)
-                                ? 0
-                                : (conversation.unreadCount || 0) + 1,
+                        name: "New contact",
+                        phone: "",
+                        lastMessage: content,
+                        lastMessageAt: time,
+                        unread: 0,
+                        unreadCount: 0,
                     },
                 },
             });
+        }
 
-            // 2) upsert message in that conversation's array
-            const uiMsg = {
-                id: message._id,
-                clientId: message.clientId || undefined,
+        dispatch({
+            type: "ADD_LOCAL_MESSAGE",
+            payload: {
                 conversationId: convId,
-                text: message.body,
-                body: message.body,
-                mediaUrl: message.mediaUrl,
-                senderType,
-                fromMe: senderType === "agent",
-                from: senderType === "agent" ? "business" : "customer",
-                status: message.status || "sent",
-                timestamp:
-                    message.timestamp || message.createdAt || new Date().toISOString(),
-                uiNormalized: true,
-            };
-
-            dispatch({
-                type: "UPSERT_MESSAGE",
-                payload: {
-                    conversationId: convId,
-                    msg: uiMsg,
-                },
-            });
-
-            // 3) handle unread + notifications
-            setGlobalUnread((prev) => {
-                const conv = state.conversations.find(
-                    (c) => String(c.id) === convId
-                );
-                const convUnread =
-                    conv && conv.id === activeConversationId
-                        ? 0
-                        : (conv?.unreadCount || 0) + 1;
-                const newTotal = prev + 1;
-                return newTotal;
-            });
-
-            if (
-                !hasWindowFocusRef.current &&
-                senderType === "customer" &&
-                convId !== String(activeConversationId)
-            ) {
-                if (notificationAudioRef.current) {
-                    notificationAudioRef.current.currentTime = 0;
-                    notificationAudioRef.current.play().catch(() => {});
-                }
-            }
-        });
-
-        s.on("message:status-update", (payload) => {
-            if (!payload) return;
-            const { conversationId, messageId, status } = payload;
-            if (!conversationId || !messageId || !status) return;
-
-            const prev = state.messagesByConv[conversationId] || [];
-            const updated = prev.map((m) =>
-                String(m.id) === String(messageId) ? { ...m, status } : m
-            );
-
-            dispatch({
-                type: "SET_MESSAGES_FOR_CONV",
-                payload: {
-                    conversationId,
-                    messages: updated,
-                },
-            });
-        });
-
-        s.on("conversation:typing", (payload) => {
-            if (!payload) return;
-            const { conversationId } = payload;
-            if (!conversationId) return;
-
-            setTypingConversationId(String(conversationId));
-            setIsCustomerTyping(true);
-
-            if (typingTimeoutRef.current) {
-                clearTimeout(typingTimeoutRef.current);
-            }
-            typingTimeoutRef.current = setTimeout(() => {
-                setIsCustomerTyping(false);
-                setTypingConversationId(null);
-            }, 2500);
-        });
-
-        s.on("conversation:presence", (payload) => {
-            if (!payload) return;
-            const { conversationId, status } = payload;
-            if (!conversationId) return;
-
-            if (String(conversationId) === String(activeConversationId)) {
-                setContactStatus(status);
-            }
-        });
-
-        setSocket(s);
-
-        return () => {
-            s.disconnect();
-        };
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [backendUrl]);
-
-    // if active conversation changes, clear unread for that conv
-    useEffect(() => {
-        if (!activeConversationId) return;
-
-        dispatch({
-            type: "UPDATE_CONVERSATION_UNREAD",
-            payload: {
-                conversationId: activeConversationId,
-                unreadCount: 0,
-            },
-        });
-
-        dispatch({
-            type: "BULK_MARK_MESSAGES_READ",
-            payload: {
-                conversationId: String(activeConversationId),
-            },
-        });
-
-        setGlobalUnread((prev) => {
-            const conv = state.conversations.find(
-                (c) => String(c.id) === String(activeConversationId)
-            );
-            const diff = conv?.unreadCount || 0;
-            return Math.max(0, prev - diff);
-        });
-    }, [activeConversationId, state.conversations]);
-
-    const activeConversationMessages = messagesByConv[String(activeConversationId)] || [];
-
-    const handleSelectConversation = (id) => {
-        if (!id) return;
-        dispatch({ type: "SET_ACTIVE_CONVERSATION", payload: id });
-        setActiveTab("chats");
-        setContactDetailsToShow(null);
-    };
-
-    const handleSend = async (text) => {
-        if (!text.trim() || !activeConversationId) return;
-
-        const conversationId = String(activeConversationId);
-        const time = new Date().toISOString();
-
-        const clientId = "msg-" + (crypto.randomUUID?.() || Date.now());
-
-        const optimisticMsg = {
-            clientId,
-            conversationId,
-            text,
-            body: text,
-            senderType: "agent",
-            fromMe: true,
-            from: "business",
-            status: "sending",
-            timestamp: time,
-            uiNormalized: true,
-        };
-
-        dispatch({
-            type: "OPTIMISTIC_APPEND_MESSAGE",
-            payload: {
-                conversationId,
-                message: optimisticMsg,
+                message: optimisticMessage,
             },
         });
 
         dispatch({
             type: "UPSERT_CONVERSATION_TOP",
             payload: {
-                conversationId,
+                conversationId: convId,
                 data: {
-                    ...activeConversation,
-                    id: conversationId,
-                    lastMessage: text,
+                    lastMessage: content,
                     lastMessageAt: time,
                     unread: 0,
                     unreadCount: 0,
@@ -799,68 +913,47 @@ const WhatsAppDashboard = () => {
             },
         });
 
-        try {
-            const res = await fetch(
-                `${backendUrl}/messages/send-text?conversationId=${conversationId}`,
-                {
-                    method: "POST",
-                    headers: {
-                        "Content-Type": "application/json",
-                    },
-                    body: JSON.stringify({ text, clientId }),
-                }
-            );
-
-            if (!res.ok) {
-                throw new Error("Failed to send message");
-            }
-            const data = await res.json();
-
-            const serverMsg = {
-                id: data._id,
-                status: data.status || "sent",
-                timestamp: data.timestamp || data.createdAt || time,
-            };
-
-            dispatch({
-                type: "SERVER_ACK_MESSAGE",
-                payload: {
-                    conversationId,
-                    clientId,
-                    serverMsg,
-                },
-            });
-        } catch (err) {
-            console.error("Send message failed:", err);
-            dispatch({
-                type: "UPSERT_MESSAGE",
-                payload: {
-                    conversationId,
-                    msg: {
-                        ...optimisticMsg,
-                        status: "failed",
-                    },
-                },
+        if (socket) {
+            socket.emit("message:send", {
+                clientId,
+                conversationId: convId,
+                text: content,
             });
         }
     };
 
-    const handleRetryMessage = async (msg) => {
-        if (!msg || !msg.conversationId || !msg.clientId) return;
-        await handleSend(msg.text || msg.body || "");
+    const handleRetryMessage = (msg) => {
+        if (!socket || !msg) return;
+
+        const convId = String(msg.conversationId || activeConversationId);
+        const content = (msg.text || msg.body || "").trim();
+        if (!convId || !content) return;
+
+        const messageId = msg.clientId || msg.id || msg._id || msg.msgId;
+
+        dispatch({
+            type: "UPDATE_MESSAGE_STATUS",
+            payload: {
+                conversationId: convId,
+                messageId,
+                status: "sending",
+            },
+        });
+
+        socket.emit("message:send", {
+            clientId: msg.clientId,
+            conversationId: convId,
+            text: content,
+        });
     };
 
     const handleLoadOlderMessages = () => {
-        if (!activeConversationId) return;
-        const conversationId = String(activeConversationId);
-        const paging = messagePagingByConv[conversationId];
-        if (paging && paging.hasMore && !paging.loading) {
-            loadMessagesPage(conversationId, paging.cursor, false);
-        }
-    };
+        const convId = String(activeConversationId);
+        if (!convId) return;
+        const meta = messagePagingByConv[convId] || {};
+        if (meta.loading || meta.hasMore === false) return;
 
-    const handleToggleSidebar = () => {
-        setSidebarOpen((prev) => !prev);
+        loadMessagesPage(convId, meta.cursor, false);
     };
 
     const handleAttachClick = () => {
@@ -895,154 +988,157 @@ const WhatsAppDashboard = () => {
                 ? "[Video]"
                 : isAudio
                 ? "[Audio]"
-                : "[File]",
+                : file.name,
             body: isImage
                 ? "[Image]"
                 : isVideo
                 ? "[Video]"
                 : isAudio
                 ? "[Audio]"
-                : "[File]",
-            mediaUrl: localUrl,
+                : file.name,
             senderType: "agent",
             fromMe: true,
             from: "business",
-            status: "uploading-0",
             timestamp: time,
-            uiNormalized: true,
+            status: "sending",
+            mediaUrl: localUrl,
+            mediaType: mime,
+            fileName: file.name,
         };
 
         dispatch({
-            type: "OPTIMISTIC_APPEND_MESSAGE",
+            type: "ADD_LOCAL_MESSAGE",
             payload: {
                 conversationId: convId,
                 message: optimistic,
             },
         });
 
-        const uploadForm = new FormData();
-        uploadForm.append("file", file);
-        uploadForm.append("conversationId", convId);
-        uploadForm.append("mime", mime);
+        dispatch({
+            type: "UPSERT_CONVERSATION_TOP",
+            payload: {
+                conversationId: convId,
+                data: {
+                    lastMessage: optimistic.text,
+                    lastMessageAt: time,
+                    unread: 0,
+                    unreadCount: 0,
+                },
+            },
+        });
 
         try {
-            const res = await fetch(`${backendUrl}/messages/upload-media`, {
-                method: "POST",
-                body: uploadForm,
-            });
-            if (!res.ok) throw new Error("Upload failed");
-            const data = await res.json();
+            const formData = new FormData();
+            formData.append("conversationId", convId);
+            formData.append("file", file);
+            formData.append("mime", mime);
 
-            const serverMsg = {
-                id: data._id || undefined,
-                mediaUrl: data.mediaUrl || data.url || localUrl,
-                status: data.status || "sent",
-                timestamp: data.timestamp || data.createdAt || time,
+            const res = await fetch(`${BACKEND}/messages/uploadMedia`, {
+                method: "POST",
+                body: formData,
+            });
+
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.error);
+
+            const server = json.message;
+
+            const uiMsg = {
+                ...optimistic,
+                id: server._id,
+                timestamp: server.createdAt,
+                status: server.status,
+                mediaUrl: server.mediaUrl,
+                msgId: server.msgId,
             };
 
             dispatch({
                 type: "SERVER_ACK_MESSAGE",
+                payload: { conversationId: convId, clientId, serverMsg: uiMsg },
+            });
+
+            dispatch({
+                type: "UPSERT_CONVERSATION_TOP",
                 payload: {
                     conversationId: convId,
-                    clientId,
-                    serverMsg,
+                    data: {
+                        lastMessage: uiMsg.text,
+                        lastMessageAt: uiMsg.timestamp,
+                    },
                 },
             });
         } catch (err) {
-            console.error("Upload media failed:", err);
+            console.error("Error sending media:", err);
+
             dispatch({
-                type: "UPSERT_MESSAGE",
+                type: "UPDATE_MESSAGE_STATUS",
                 payload: {
                     conversationId: convId,
-                    msg: {
-                        ...optimistic,
-                        status: "failed",
-                    },
+                    messageId: clientId,
+                    status: "failed",
                 },
             });
         }
     };
 
-    const handleEmojiSelect = (emoji) => {
+    const handleEmojiSelect = (emojiChar) => {
         dispatch({
             type: "SET_COMPOSER",
-            payload: (composerValue || "") + emoji,
+            payload: composerValue + emojiChar,
         });
         setShowEmojiPicker(false);
     };
 
-    const handleAddToContacts = async ({ id, name, phone }) => {
+    // Add to contacts directly from chat header menu
+    const handleAddToContacts = async (payload) => {
+        if (!payload && !activeConversation) return;
+
+        const rawPhone = payload?.phone || activePhone;
+        const rawName =
+            payload?.name ||
+            activeContact?.name ||
+            activeConversation?.name ||
+            rawPhone;
+
+        const phone = (rawPhone || "").toString().trim();
+        const name = (rawName || "").toString().trim();
+
+        if (!phone) {
+            console.warn("Cannot add to contacts – missing phone", payload);
+            return;
+        }
+
         try {
-            const payload = {
-                name: name || "Unknown",
-                phone,
-                tags: [],
-                notes: "",
-            };
-
-            const res = await fetch(`${backendUrl}/contacts`, {
+            await fetch(`${BACKEND}/contacts`, {
                 method: "POST",
-                headers: {
-                    "Content-Type": "application/json",
-                },
-                body: JSON.stringify(payload),
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    phone,
+                    name: name || phone,
+                    notes: "",
+                }),
             });
 
-            if (!res.ok) {
-                throw new Error("Failed to add contact");
-            }
-
-            const newContact = await res.json();
-
-            setContacts((prev) => [...prev, newContact]);
-
-            const key = normalizePhone(newContact.phone);
-            setContactsMap((prevMap) => ({
-                ...prevMap,
-                [key]: newContact,
-            }));
+            // Refresh contacts & mapping so header + list immediately show the saved name
+            await loadContacts();
         } catch (err) {
-            console.error("Error adding to contacts:", err);
+            console.error("Failed to create contact from chat:", err);
+            // Even if it fails, we stay in chat and don't break anything.
         }
     };
-
-    const handleTabChange = (tab) => {
-        setActiveTab(tab);
-        if (tab !== "chats") {
-            dispatch({
-                type: "SET_ACTIVE_CONVERSATION",
-                payload: null,
-            });
-        }
-    };
-
-    const isCustomerTypingForActive =
-        isCustomerTyping &&
-        typingConversationId &&
-        String(typingConversationId) === String(activeConversationId);
-
-    const stats = ANALYTICS_STATS;
-    const messageVolume = MESSAGE_VOLUME;
 
     return (
-        <div className="flex h-screen bg-slate-950 text-slate-100">
+        <div className="h-screen flex bg-gray-100">
             <Sidebar
-                activeTab={activeTab}
-                onTabChange={handleTabChange}
                 sidebarOpen={sidebarOpen}
-                onToggleSidebar={handleToggleSidebar}
-                globalUnread={globalUnread}
+                setSidebarOpen={setSidebarOpen}
+                activeTab={activeTab}
+                setActiveTab={setActiveTab}
             />
 
-            <div className="flex-1 flex flex-col relative">
-                <audio
-                    ref={notificationAudioRef}
-                    src="/sounds/incoming-message.mp3"
-                    preload="auto"
-                />
-
+            <div className="flex-1 flex min-w-0">
                 {activeTab === "chats" && (
-                    <div className="relative h-full">
+                    <div className="flex-1 min-w-0 relative">
                         <ChatLayout
                             conversations={layoutConversations}
                             activeConversationId={activeConversationId}
@@ -1066,7 +1162,7 @@ const WhatsAppDashboard = () => {
                             isLoadingMore={activePaging.loading}
                             onLoadOlderMessages={handleLoadOlderMessages}
                             onSearchChange={setConversationSearch}
-                            isCustomerTyping={isCustomerTypingForActive}
+                            isCustomerTyping={isCustomerTyping}
                             customerTypingText="Customer is typing…"
                             contactStatus={contactStatus}
                             onRetryMessage={handleRetryMessage}
@@ -1083,10 +1179,7 @@ const WhatsAppDashboard = () => {
                         />
 
                         {showEmojiPicker && (
-                            <div
-                                ref={emojiPickerRef}
-                                className="absolute bottom-16 right-4 z-50"
-                            >
+                            <div className="absolute bottom-16 right-4 z-50">
                                 <EmojiPicker
                                     onEmojiClick={(emojiData) =>
                                         handleEmojiSelect(emojiData.emoji)
@@ -1101,19 +1194,81 @@ const WhatsAppDashboard = () => {
 
                 {activeTab === "analytics" && (
                     <AnalyticsView
-                        stats={stats}
-                        messageVolume={messageVolume}
+                        stats={ANALYTICS_STATS}
+                        messageVolume={MESSAGE_VOLUME}
                         maxVolume={maxVolume}
                     />
                 )}
 
                 {activeTab === "contacts" && (
                     <ContactsView
-                        conversations={layoutConversations}
-                        onOpenContactDetails={handleOpenContactDetails}
+                        onSelectContact={(contact) => {
+                            if (!contact?.phone) {
+                                setActiveTab("chats");
+                                return;
+                            }
+
+                            const existing = conversations.find(
+                                (c) =>
+                                    normalizePhone(c.phone) ===
+                                    normalizePhone(contact.phone)
+                            );
+
+                            if (!existing) {
+                                // No existing conversation yet; just go back to chats.
+                                setActiveTab("chats");
+                                return;
+                            }
+
+                            const id = String(existing.id || existing._id);
+
+                            dispatch({
+                                type: "UPSERT_CONVERSATION_TOP",
+                                payload: {
+                                    conversationId: id,
+                                    data: {
+                                        id,
+                                        _id: existing._id,
+                                        name:
+                                            contact.name ||
+                                            existing.name ||
+                                            existing.displayName ||
+                                            contact.phone,
+                                        phone: contact.phone || existing.phone,
+                                        lastMessage: existing.lastMessage || "",
+                                        lastMessageAt:
+                                            existing.lastMessageAt ||
+                                            existing.updatedAt ||
+                                            existing.createdAt ||
+                                            new Date().toISOString(),
+                                        unread: 0,
+                                        unreadCount: 0,
+                                    },
+                                },
+                            });
+
+                            setActiveTab("chats");
+                            dispatch({
+                                type: "SET_ACTIVE_CONVERSATION",
+                                payload: id,
+                            });
+                        }}
+                        onContactsChange={(list) => {
+                            setContacts(list || []);
+                            const map = {};
+                            (list || []).forEach((c) => {
+                                if (c.phone) {
+                                    const key = normalizePhone(c.phone);
+                                    if (key) {
+                                        map[key] = c;
+                                    }
+                                }
+                            });
+                            setContactsMap(map);
+                        }}
                     />
                 )}
-
+                
                 {contactDetailsToShow && (
                     <ContactsView
                         initialDetails={contactDetailsToShow}
