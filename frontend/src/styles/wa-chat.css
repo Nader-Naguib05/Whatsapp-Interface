@@ -54,6 +54,7 @@
   outline-offset: 1px;
 }
 
+/* Conversation list */
 .wa-conversation-list {
   flex: 1;
   overflow-y: auto;
@@ -156,6 +157,7 @@
   min-height: 0;
 }
 
+/* Header */
 .wa-chat-header {
   display: flex;
   align-items: center;
@@ -205,11 +207,11 @@
   flex: 1;
   padding: 16px 24px;
   overflow-y: auto;
-  background: url("data:image/svg+xml,%3Csvg opacity='0.05' xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='80' height='80' fill='%23ffffff'/%3E%3Crect x='80' y='80' width='80' height='80' fill='%23ffffff'/%3E%3C/svg%3E")
-    repeat;
+  background: url("data:image/svg+xml,%3Csvg opacity='0.05' xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Crect width='80' height='80' fill='%23ffffff'/%3E%3Crect x='80' y='80' width='80' height='80' fill='%23ffffff'/%3E%3C/svg%3E") repeat;
   min-height: 0;
 }
 
+/* Day separator */
 .wa-day-separator {
   display: flex;
   justify-content: center;
@@ -224,7 +226,7 @@
   border-radius: 999px;
 }
 
-/* message rows */
+/* Message bubble */
 .wa-message-row {
   display: flex;
   margin-bottom: 4px;
@@ -261,16 +263,7 @@
   color: #f9fafb;
 }
 
-.wa-message-bubble--sending {
-  opacity: 0.6;
-}
-
-.wa-message-text {
-  white-space: pre-wrap;
-  word-wrap: break-word;
-}
-
-/* META INFO */
+/* META */
 .wa-message-meta {
   margin-top: 2px;
   display: flex;
@@ -279,31 +272,14 @@
   gap: 4px;
   font-size: 11px;
   opacity: 0.8;
-  transition: opacity 0.2s ease;
 }
 
 .wa-message-row:hover .wa-message-meta {
   opacity: 1;
 }
 
-.wa-message-status svg {
-  display: block;
-}
-
 .wa-message-status--read {
   color: #22c55e;
-}
-
-.wa-message-failed {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 14px;
-  height: 14px;
-  border-radius: 999px;
-  background: #b91c1c;
-  color: white;
-  font-size: 10px;
 }
 
 .wa-message-failed-btn {
@@ -314,19 +290,7 @@
   color: #b91c1c;
 }
 
-.wa-message-failed-btn:hover {
-  opacity: 0.7;
-}
-
-/* SEND DOT */
-.wa-sending-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: #9ca3af;
-}
-
-/* COMPOSER */
+/* Composer */
 .wa-chat-composer {
   display: flex;
   align-items: flex-end;
@@ -349,7 +313,6 @@
 
 .wa-composer-input:focus {
   outline: 2px solid #22c55e;
-  outline-offset: 1px;
   background: #ffffff;
 }
 
@@ -362,19 +325,12 @@
   justify-content: center;
   background: #9ca3af;
   color: white;
-  cursor: pointer;
 }
 
 .wa-send-button--active {
   background: #22c55e;
 }
 
-.wa-send-button:disabled {
-  cursor: default;
-  opacity: 0.6;
-}
-
-/* EMPTY STATE */
 .wa-empty-state {
   margin: auto;
   text-align: center;
@@ -382,34 +338,7 @@
   color: #4b5563;
 }
 
-.wa-empty-state h2 {
-  margin-bottom: 4px;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.wa-empty-state p {
-  font-size: 14px;
-}
-
-/* RESPONSIVE */
-@media (max-width: 900px) {
-  .wa-shell {
-    grid-template-columns: 1fr;
-  }
-
-  .wa-sidebar {
-    display: none;
-  }
-
-  .wa-shell--show-sidebar .wa-sidebar {
-    display: flex;
-  }
-}
-
-/* -------------------------
-   TYPING INDICATOR
--------------------------*/
+/* TYPING INDICATOR */
 .wa-typing-indicator {
   display: flex;
   align-items: center;
@@ -421,12 +350,10 @@
   border-radius: 16px;
   font-size: 13px;
   color: #555;
-  animation: fadeIn 0.3s ease-out;
 }
 
 .wa-typing-dots-slow {
   display: flex;
-  align-items: center;
   gap: 4px;
 }
 
@@ -444,15 +371,7 @@
   30% { opacity: 1; transform: translateY(-3px); }
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: scale(0.97); }
-  to   { opacity: 1; transform: scale(1); }
-}
-
-/* ------------------------------------------
-   MEDIA ENHANCEMENTS
--------------------------------------------*/
-
+/* MEDIA */
 .wa-message-media {
   position: relative;
   margin-top: 2px;
@@ -464,10 +383,8 @@
 .wa-media-img,
 .wa-media-video {
   width: 100%;
-  border-radius: 12px !important;
+  border-radius: 12px;
   object-fit: cover;
-  background: #d1d5db;
-  opacity: 0;
   animation: fadeInMedia 0.25s ease forwards;
 }
 
@@ -483,148 +400,54 @@
   border-radius: 8px;
 }
 
-/* Upload overlay */
-.wa-media-loading-overlay {
-  position: absolute;
-  inset: 0;
-  background: rgba(0,0,0,0.22);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 12px;
-  z-index: 5;
-}
-
-.wa-loader {
-  width: 26px;
-  height: 26px;
-  border: 3px solid rgba(255,255,255,0.4);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spinLoader 0.7s linear infinite;
-}
-
-@keyframes spinLoader {
-  to { transform: rotate(360deg); }
-}
-
-.wa-media-video:focus {
-  outline: none;
-}
-
-/* Document card */
-.wa-media-file-card {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
-  background: #f3f4f6;
-  border-radius: 10px;
-  text-decoration: none;
-  color: #111;
-  transition: background 0.15s ease;
-  max-width: 220px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.12),
-              0 1px 3px rgba(0,0,0,0.08);
-}
-
-.wa-media-file-card:hover {
-  background: #e5e7eb;
-}
-
-.wa-media-file-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.wa-media-file-name {
-  font-weight: 600;
-  font-size: 13px;
-  color: #111827;
-}
-
-.wa-media-file-size {
-  font-size: 11px;
-  opacity: 0.7;
-}
-
-/* Drag & Drop highlight */
-.wa-dropzone--active {
-  outline: 2px dashed #22c55e;
-  outline-offset: -4px;
-  background: rgba(34,197,94,0.08);
-}
-
-/* Shadow polish */
-.wa-message-media img,
-.wa-message-media video,
-.wa-media-file-card {
-  box-shadow: 0 1px 2px rgba(0,0,0,0.12),
-              0 1px 4px rgba(0,0,0,0.08);
-}
-
-/* ---------------------------------------------------
-   MOBILE RESPONSIVE LAYOUT
-   Breakpoint: 768px
---------------------------------------------------- */
-
+/* Mobile layout system — FINAL VERSION */
 @media (max-width: 768px) {
-  /* Shell becomes stacked layout */
   .wa-shell {
     display: block !important;
+    position: relative;
+    overflow: hidden;
     width: 100%;
     height: 100vh;
   }
 
-  /* -------------------------
-     SIDEBAR BEHAVIOR
-  ------------------------- */
+  /* Sidebar */
   .wa-sidebar {
-    width: 100% !important;
+    width: 100%;
     max-width: none;
-    height: 100vh !important;
+    height: 100vh;
     position: absolute;
-    top: 0;
     left: 0;
-    background: var(--wa-bg);
+    top: 0;
+    background: #f9fafb;
     z-index: 20;
+    transform: translateX(-100%);
     transition: transform 0.25s ease;
   }
 
   .wa-mobile-visible {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
-
   .wa-mobile-hidden {
-    transform: translateX(-100%);
+    transform: translateX(-100%) !important;
   }
 
-  /* -------------------------
-     CHAT AREA (FULL SCREEN)
-  ------------------------- */
+  /* Chat area */
   .wa-chat-area {
     position: absolute;
-    top: 0;
     left: 0;
+    top: 0;
     height: 100vh !important;
     width: 100% !important;
-    background: var(--wa-bg);
     z-index: 30;
+    transform: translateX(100%);
     transition: transform 0.25s ease;
   }
 
   .wa-chat-area.wa-mobile-visible {
-    transform: translateX(0);
+    transform: translateX(0) !important;
   }
 
-  .wa-chat-area.wa-mobile-hidden {
-    transform: translateX(100%);
-  }
-
-  /* -------------------------
-     MOBILE BACK BUTTON
-  ------------------------- */
+  /* Mobile back button */
   .wa-mobile-back-btn {
     height: 50px;
     display: flex;
@@ -632,67 +455,28 @@
     padding-left: 6px;
   }
 
-  .wa-mobile-back-btn button {
-    background: transparent;
-    border: none;
-    padding: 8px 12px;
-    border-radius: 50%;
-  }
-
-  /* -------------------------
-     HEADER
-  ------------------------- */
+  /* Header */
   .wa-chat-header {
-    height: 60px !important;
+    height: 60px;
     padding: 8px 10px;
-    gap: 10px;
   }
 
-  .wa-chat-title {
-    font-size: 15px;
-    font-weight: 600;
-  }
-
-  .wa-chat-subtitle {
-    font-size: 12px;
-    opacity: 0.7;
-  }
-
-  /* -------------------------
-     MESSAGES
-  ------------------------- */
+  /* Messages */
   .wa-chat-messages {
-    padding: 10px !important;
+    padding: 10px;
   }
 
-  .wa-message-row {
-    padding: 2px 0;
-  }
-
-  /* Full-width bubbles on mobile */
   .wa-message-bubble {
     max-width: 90% !important;
   }
 
-  /* -------------------------
-     COMPOSER
-  ------------------------- */
+  /* Composer */
   .wa-chat-composer {
-    height: 60px !important;
-    padding: 8px 10px !important;
+    height: 60px;
+    padding: 8px 10px;
   }
 
   .wa-composer-input {
     font-size: 14px;
-    padding: 7px 10px;
-  }
-
-  /* -------------------------
-     DROPDOWN MENU
-  ------------------------- */
-  .wa-header-menu {
-    right: 5px !important;
-    top: 55px !important;
-    width: 150px !important;
   }
 }
