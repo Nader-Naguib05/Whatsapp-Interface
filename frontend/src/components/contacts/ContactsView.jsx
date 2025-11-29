@@ -24,11 +24,11 @@ import {
   deleteContact,
 } from "../../api/contacts";
 
+// ADDED:
+import { useLocation } from "react-router-dom";
+
 const FAVORITES_KEY = "wa_contacts_favorites_v1";
 
-// -----------------------------
-// Helpers
-// -----------------------------
 const normalizePhone = (phone = "") => phone.replace(/\D/g, "");
 
 const getInitials = (name = "") =>
@@ -54,9 +54,6 @@ const formatExactDateTime = (value) => {
   return d.toLocaleString();
 };
 
-// -----------------------------
-// Avatar
-// -----------------------------
 const Avatar = ({ name }) => {
   const initials = name ? getInitials(name) : "?";
 
@@ -67,9 +64,7 @@ const Avatar = ({ name }) => {
   );
 };
 
-// -----------------------------
-// Contact Modal (create/edit)
-// -----------------------------
+// Contact Modal
 const ContactModal = ({
   mode,
   initial,
@@ -208,9 +203,7 @@ const ContactModal = ({
   );
 };
 
-// -----------------------------
-// Details drawer (SaaS minimal)
-// -----------------------------
+// Drawer
 const ContactDetailsDrawer = ({
   contact,
   onClose,
@@ -248,7 +241,6 @@ const ContactDetailsDrawer = ({
       </div>
 
       <div className="p-5 flex flex-col gap-5 overflow-y-auto flex-1 text-sm">
-        {/* Header */}
         <div className="flex items-center gap-3">
           <Avatar name={contact.name || contact.phone || "?"} />
           <div className="min-w-0 space-y-0.5">
@@ -261,7 +253,6 @@ const ContactDetailsDrawer = ({
           </div>
         </div>
 
-        {/* Quick actions */}
         <div className="flex gap-2">
           <button
             type="button"
@@ -273,7 +264,7 @@ const ContactDetailsDrawer = ({
           </button>
           <button
             type="button"
-            onClick={onCall}
+            onClick={() => onCall(contact.phone)}
             className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 text-slate-800 text-xs font-medium hover:bg-slate-200 border border-slate-200 transition"
           >
             <PhoneCall className="w-3.5 h-3.5" />
@@ -281,7 +272,6 @@ const ContactDetailsDrawer = ({
           </button>
         </div>
 
-        {/* Overview */}
         <section className="space-y-2">
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             Overview
@@ -316,7 +306,6 @@ const ContactDetailsDrawer = ({
           </div>
         </section>
 
-        {/* Notes */}
         <section className="space-y-2">
           <div className="flex items-center justify-between">
             <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
@@ -324,7 +313,7 @@ const ContactDetailsDrawer = ({
             </div>
             <button
               type="button"
-              onClick={onCopyPhone}
+              onClick={() => onCopyPhone(contact.phone)}
               className="inline-flex items-center gap-1 text-[11px] text-slate-500 hover:text-slate-800"
             >
               <CopyIcon className="w-3 h-3" />
@@ -336,7 +325,6 @@ const ContactDetailsDrawer = ({
           </div>
         </section>
 
-        {/* System info + last message */}
         <section className="space-y-2">
           <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">
             System
@@ -372,9 +360,7 @@ const ContactDetailsDrawer = ({
   );
 };
 
-// -----------------------------
-// Duplicate banner (minimal)
-// -----------------------------
+// Duplicate banner
 const DuplicateBanner = ({
   info,
   onMergeKeepFirst,
@@ -445,10 +431,10 @@ const DuplicateBanner = ({
   );
 };
 
-// -----------------------------
-// Main Contacts View
-// -----------------------------
 const ContactsView = ({ onSelectContact, onContactsChange }) => {
+  const location = useLocation(); // ADDED
+  const prefill = location.state?.prefill || null; // ADDED
+
   const [contacts, setContacts] = useState([]);
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -457,7 +443,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   const [modalError, setModalError] = useState("");
 
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState("create"); // "create" | "edit"
+  const [modalMode, setModalMode] = useState("create");
   const [editingContact, setEditingContact] = useState(null);
 
   const [favorites, setFavorites] = useState([]);
@@ -469,7 +455,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   const [copyToast, setCopyToast] = useState("");
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  // sync helper
   const syncContacts = (next) => {
     setContacts(next);
     onContactsChange?.(next);
@@ -481,15 +466,14 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       setError("");
       const data = await getContacts(q);
       syncContacts(data || []);
-    } catch (err) {
-      console.error("Failed to load contacts:", err);
+    } catch {
       setError("Failed to load contacts. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
-  // Load favorites from localStorage
+  // Load initial favorites
   useEffect(() => {
     try {
       const raw = localStorage.getItem(FAVORITES_KEY);
@@ -499,25 +483,37 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
           setFavorites(parsed);
         }
       }
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
 
   const persistFavorites = (next) => {
     setFavorites(next);
     try {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(next));
-    } catch {
-      // ignore
-    }
+    } catch {}
   };
 
   useEffect(() => {
     loadContacts();
   }, []);
 
-  // Search logic
+  // ADDED: Open modal when navigating from ChatLayout
+  useEffect(() => {
+    if (prefill) {
+      setModalMode("create");
+
+      setEditingContact({
+        name: prefill.name || "",
+        phone: prefill.phone || "",
+        notes: "",
+      });
+
+      setShowModal(true);
+
+      window.history.replaceState({}, "");
+    }
+  }, [prefill]);
+
   const filteredContacts = useMemo(() => {
     if (!query.trim()) return contacts;
 
@@ -618,7 +614,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       setShowModal(false);
       setEditingContact(null);
     } catch (err) {
-      console.error("Save contact failed:", err);
       setModalError(
         err?.response?.data?.error || "Failed to save contact. Try again."
       );
@@ -641,8 +636,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         const nextFav = favorites.filter((id) => id !== contactId);
         persistFavorites(nextFav);
       }
-    } catch (err) {
-      console.error("Delete contact failed:", err);
+    } catch {
       alert("Failed to delete contact.");
     } finally {
       setLoadingAction(false);
@@ -667,9 +661,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       setTimeout(() => {
         setCopyToast("");
       }, 1500);
-    } catch (err) {
-      console.error("Copy failed:", err);
-    }
+    } catch {}
   };
 
   const handleCall = (phone) => {
@@ -719,9 +711,8 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       }
 
       setDuplicateInfo(null);
-    } catch (err) {
-      console.error("Merge contacts failed:", err);
-      alert("Failed to merge contacts. You can still edit them manually.");
+    } catch {
+      alert("Failed to merge contacts.");
     } finally {
       setDuplicateLoading(false);
     }
@@ -737,7 +728,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
 
   return (
     <div className="relative flex flex-col h-full bg-slate-50/70">
-      {/* HEADER */}
       <div className="px-6 pt-5 pb-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-20">
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-4">
           <div className="space-y-0.5">
@@ -755,10 +745,8 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         </div>
       </div>
 
-      {/* CONTENT */}
       <div className="flex-1 overflow-y-auto px-4 pb-10">
         <div className="max-w-2xl mx-auto pt-4 flex flex-col h-full">
-          {/* Search */}
           <div className="mb-4">
             <div className="relative">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
@@ -772,14 +760,12 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
             </div>
           </div>
 
-          {/* Error */}
           {error && (
             <div className="mb-3 text-xs text-red-500 bg-red-50 border border-red-100 rounded-xl px-3 py-2">
               {error}
             </div>
           )}
 
-          {/* Loading */}
           {loading && (
             <div className="flex flex-1 items-center justify-center py-16 text-slate-400">
               <div className="flex flex-col items-center gap-2">
@@ -789,7 +775,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
             </div>
           )}
 
-          {/* Empty state */}
           {!loading && sortedContacts.length === 0 && (
             <div className="flex flex-1 flex-col items-center justify-center text-slate-400 py-20">
               <div className="mb-4 rounded-full bg-white shadow-sm border border-slate-100 w-14 h-14 flex items-center justify-center">
@@ -804,7 +789,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
             </div>
           )}
 
-          {/* List */}
           {!loading && sortedContacts.length > 0 && (
             <div className="space-y-2.5">
               {sortedContacts.map((c) => {
@@ -814,8 +798,8 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                 return (
                   <div
                     key={c._id}
-                    className="relative group rounded-2xl bg-white border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:shadow-[0_6px_20px_rgba(15,23,42,0.12)] hover:border-emerald-100 transition-all duration-150"
-                  >
+                    className="relative group rounded-2xl bg-white border border-slate-200 shadow-[0_1px_3px_rgba(15,23,42,0.06)] hover:shadow-[0_6px_20px_rgrgba(15,23,42,0.12)] hover:border-emerald-100 transition-all duration-150"
+                    >
                     <button
                       type="button"
                       onClick={() => handleCardClick(c)}
@@ -850,7 +834,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                           {createdLabel}
                         </span>
 
-                        {/* Favorite toggle */}
                         <button
                           type="button"
                           onClick={(e) => {
@@ -867,7 +850,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                           )}
                         </button>
 
-                        {/* Menu toggle */}
                         <div className="relative">
                           <button
                             type="button"
@@ -965,7 +947,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         </div>
       </div>
 
-      {/* Floating "New contact" button */}
       <button
         type="button"
         onClick={openCreateModal}
@@ -975,7 +956,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         New contact
       </button>
 
-      {/* Modal */}
       {showModal && (
         <ContactModal
           mode={modalMode}
@@ -992,15 +972,12 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         />
       )}
 
-      {/* Details drawer */}
       {detailsContact && (
         <ContactDetailsDrawer
           contact={detailsContact}
           onClose={closeDetails}
           onOpenChat={() => {
-            if (onSelectContact) {
-              onSelectContact(detailsContact);
-            }
+            if (onSelectContact) onSelectContact(detailsContact);
             closeDetails();
           }}
           onCopyPhone={() => handleCopyPhone(detailsContact.phone)}
@@ -1008,7 +985,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         />
       )}
 
-      {/* Duplicate banner */}
       <DuplicateBanner
         info={duplicateInfo}
         loading={duplicateLoading}
@@ -1023,7 +999,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
         onDismiss={() => setDuplicateInfo(null)}
       />
 
-      {/* copy toast */}
       {copyToast && (
         <div className="fixed bottom-5 right-5 z-30 px-3 py-2 rounded-full bg-slate-900/90 text-white text-[11px] shadow-lg">
           {copyToast}

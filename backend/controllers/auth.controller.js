@@ -46,7 +46,8 @@ export async function register(req, res) {
 export async function login(req, res) {
   try {
     const { email, password } = req.body;
-
+        const hashed = await bcrypt.hash(password, 12);
+        console.log(hashed);
     const user = await User.findOne({ email });
     if (!user) return res.status(400).json({ error: 'Invalid credentials' });
 

@@ -1,24 +1,53 @@
-import jwt from 'jsonwebtoken';
+// middleware/auth.middleware.js
+import jwt from "jsonwebtoken";
+
 const JWT_SECRET = process.env.JWT_SECRET;
 
+if (!JWT_SECRET) {
+  console.warn(
+    "[auth.middleware] WARNING: JWT_SECRET is not set in environment variables."
+  );
+}
+
 export function requireAuth(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-
-  if (!token) return res.status(401).json({ error: "Not authorized" });
-
   try {
+    const authHeader = req.headers.authorization || "";
+
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({ error: "Not authorized" });
+    }
+
+    const token = authHeader.split(" ")[1];
+
+    if (!token) {
+      return res.status(401).json({ error: "Not authorized" });
+    }
+
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    next();
-  } catch {
-    return res.status(401).json({ error: "Invalid token" });
+
+    // We know your token payload is: { id, role } :contentReference[oaicite:3]{index=3}
+    req.user = {
+      id: decoded.id,
+      role: decoded.role,
+    };
+
+    return next();
+  } catch (err) {
+    console.error("[requireAuth] JWT error:", err.message);
+    return res.status(401).json({ error: "Invalid or expired token" });
   }
 }
 
-export function requireRole(role) {
+// Optional: role-based guard without breaking anything
+export function requireRole(...allowedRoles) {
   return (req, res, next) => {
-    if (req.user.role !== role)
+    if (!req.user) {
+      return res.status(401).json({ error: "Not authorized" });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
       return res.status(403).json({ error: "Forbidden" });
+    }
 
     next();
   };

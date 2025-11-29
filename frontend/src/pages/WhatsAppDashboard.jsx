@@ -17,7 +17,6 @@ import {
 } from "../api/conversations";
 
 import { createSocket } from "../lib/socket";
-import EmojiPicker from "emoji-picker-react";
 
 const PAGE_SIZE = 40;
 
@@ -1092,13 +1091,7 @@ const WhatsAppDashboard = () => {
         }
     };
 
-    const handleEmojiSelect = (emojiChar) => {
-        dispatch({
-            type: "SET_COMPOSER",
-            payload: composerValue + emojiChar,
-        });
-        setShowEmojiPicker(false);
-    };
+
 
     // Add to contacts directly from chat header menu
     const handleAddToContacts = async (payload) => {
@@ -1143,19 +1136,6 @@ const WhatsAppDashboard = () => {
             {/* ---------- MOBILE ---------- */}
             {isMobile && (
                 <>
-                    {/* SIDEBAR (full screen) */}
-                    {mobileView === "sidebar" && (
-                        <Sidebar
-                            sidebarOpen={true}
-                            setSidebarOpen={() => setMobileView("inbox")}
-                            activeTab={activeTab}
-                            setActiveTab={(tab) => {
-                                setActiveTab(tab);
-                                if (tab === "chats") setMobileView("inbox");
-                            }}
-                        />
-                    )}
-
                     {/* INBOX (conversation list) */}
                     {mobileView === "inbox" && (
                         <ChatLayout
@@ -1180,7 +1160,7 @@ const WhatsAppDashboard = () => {
                         <div className="relative h-full">
                             <button
                                 onClick={() => setMobileView("inbox")}
-                                className="absolute top-3 left-3 z-50 bg-white p-2 rounded-full shadow"
+                                className="absolute top-18 left-3 z-50 bg-white p-2 rounded-full shadow"
                             >
                                 <svg width="22" height="22" viewBox="0 0 24 24">
                                     <path
@@ -1236,12 +1216,6 @@ const WhatsAppDashboard = () => {
             {/* ---------- DESKTOP ---------- */}
             {!isMobile && (
                 <div className="h-full w-full flex">
-                    <Sidebar
-                        sidebarOpen={sidebarOpen}
-                        setSidebarOpen={setSidebarOpen}
-                        activeTab={activeTab}
-                        setActiveTab={setActiveTab}
-                    />
 
                     <div className="flex-1 min-w-0">
                         {/* tabs */}
@@ -1281,22 +1255,7 @@ const WhatsAppDashboard = () => {
                                 onOpenContactDetails={handleOpenContactDetails}
                             />
                         )}
-
-                        {activeTab === "broadcast" && <BroadcastView />}
-                        {activeTab === "analytics" && (
-                            <AnalyticsView
-                                stats={ANALYTICS_STATS}
-                                messageVolume={MESSAGE_VOLUME}
-                                maxVolume={maxVolume}
-                            />
-                        )}
-                        {activeTab === "contacts" && (
-                            <ContactsView
-                                onSelectContact={(contact) => {}}
-                                onContactsChange={(list) => {}}
-                            />
-                        )}
-                        {activeTab === "settings" && <SettingsView />}
+                        
                     </div>
                 </div>
             )}

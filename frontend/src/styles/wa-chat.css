@@ -167,6 +167,78 @@
   background: #f9fafb;
 }
 
+/* ============================= */
+/* Header Dropdown Menu          */
+/* ============================= */
+
+.wa-header-menu {
+  position: absolute;
+  top: 60px;                 /* adjust depending on header height */
+  right: 20px;
+  width: 180px;
+  background: #ffffff;
+  border: 1px solid #e5e7eb; /* Tailwind gray-200 */
+  border-radius: 12px;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+  padding: 6px 0;
+  z-index: 999;
+  animation: waMenuFadeIn 0.15s ease-out;
+}
+
+@keyframes waMenuFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ============================= */
+/* Header Dropdown Menu Items    */
+/* ============================= */
+
+.wa-header-menu-item {
+  width: 100%;
+  padding: 10px 14px;
+  font-size: 14px;
+  color: #374151;            /* gray-700 */
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+
+.wa-header-menu-item:hover {
+  background: #f9fafb;       /* subtle hover */
+}
+
+/* Optional: icon inside menu item */
+.wa-header-menu-item svg {
+  width: 18px;
+  height: 18px;
+  color: #6b7280;            /* gray-500 */
+  transition: color 0.15s ease;
+}
+
+.wa-header-menu-item:hover svg {
+  color: #111827;            /* gray-900 */
+}
+
+/* Last item (logout) with danger tone */
+.wa-header-menu-item.logout {
+  color: #dc2626;            /* red-600 */
+}
+
+.wa-header-menu-item.logout:hover {
+  background: #fee2e2;       /* red-100 */
+  color: #b91c1c;            /* red-700 */
+}
+
+
 .wa-chat-header-left {
   display: flex;
   align-items: center;
