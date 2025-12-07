@@ -880,6 +880,7 @@ const WhatsAppDashboard = () => {
             text: content,
             body: content,
             senderType: "agent",
+            senderName: "Agent",
             fromMe: true,
             from: "business",
             timestamp: time,
