@@ -8,36 +8,35 @@ const numberFormatter = new Intl.NumberFormat();
 function formatDuration(seconds) {
     if (seconds == null || Number.isNaN(seconds)) return "—";
 
-    if (seconds < 60) return `${Math.round(seconds)}s`;
+    if (seconds < 60) return `${Math.round(seconds)} ثانية`;
     const minutes = seconds / 60;
-    if (minutes < 60) return `${minutes.toFixed(1)} min`;
+    if (minutes < 60) return `${minutes.toFixed(1)} دقيقة`;
     const hours = minutes / 60;
-    return `${hours.toFixed(1)} h`;
+    return `${hours.toFixed(1)} ساعة`;
 }
 
 const LoadingState = () => (
   <div className="flex flex-col items-center gap-3 text-gray-500">
     <div className="w-8 h-8 border-2 border-gray-300 border-t-transparent rounded-full animate-spin" />
-    <p className="text-sm">Loading analytics…</p>
+    <p className="text-sm">جارٍ تحميل التحليلات…</p>
   </div>
 );
-
 
 const ErrorState = ({ message, onRetry }) => (
     <div className="h-full flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center bg-red-50 border border-red-100 rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-red-700 mb-2">
-                Couldn&apos;t load analytics
+                تعذّر تحميل التحليلات
             </h3>
             <p className="text-xs text-red-600 mb-4">
-                {message || "Something went wrong while fetching the data."}
+                {message || "حدث خطأ أثناء جلب البيانات."}
             </p>
             {onRetry && (
                 <button
                     onClick={onRetry}
                     className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-full bg-red-600 text-white hover:bg-red-700 transition-colors"
                 >
-                    Try again
+                    إعادة المحاولة
                 </button>
             )}
         </div>
@@ -48,11 +47,10 @@ const EmptyState = () => (
     <div className="h-full flex items-center justify-center px-4">
         <div className="max-w-md w-full text-center bg-white border border-dashed border-gray-300 rounded-2xl p-6">
             <h3 className="text-sm font-semibold text-gray-900 mb-1">
-                No activity yet
+                لا يوجد نشاط بعد
             </h3>
             <p className="text-xs text-gray-500">
-                As conversations and broadcasts start coming in, this page will
-                show live performance analytics.
+                عند بدء المحادثات والحملات، ستظهر هنا تحليلات الأداء مباشرة.
             </p>
         </div>
     </div>
@@ -91,15 +89,14 @@ const AnalyticsView = () => {
     }, []);
 
     if (loading) {
-  return (
-    <div className="relative w-full h-full">
-      <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
-        <LoadingState />
-      </div>
-    </div>
-  );
-}
-
+      return (
+        <div className="relative w-full h-full">
+          <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+            <LoadingState />
+          </div>
+        </div>
+      );
+    }
 
     if (error) return <ErrorState message={error} onRetry={fetchAnalytics} />;
 
@@ -126,8 +123,6 @@ const AnalyticsView = () => {
 
     const responseSample = responseTime?.sampleSize || 0;
 
-    // ---- lightweight "insights" (pure frontend, no backend changes) ----
-
     const busiestDay =
         messageVolume.length > 0
             ? messageVolume.reduce(
@@ -144,32 +139,29 @@ const AnalyticsView = () => {
     const customerShare =
         totalMessages > 0 ? (customerMessages / totalMessages) * 100 : 0;
 
-    // --------------------------------------------------------------------
-
     return (
         <div className="h-full overflow-y-auto bg-slate-50">
             <div className="max-w-6xl mx-auto px-4 py-6 lg:py-8">
-                {/* Top header */}
+
+                {/* Header */}
                 <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-6">
-                    <div>
+                    <div className="text-right md:text-left">
                         <h1 className="text-[22px] md:text-2xl font-semibold text-slate-900 tracking-tight">
-                            Analytics &amp; Reports
+                            التحليلات والتقارير
                         </h1>
                         <p className="mt-1 text-xs text-slate-500 max-w-xl">
-                            Monitor conversation performance, broadcast impact,
-                            and response-time health for your WhatsApp
-                            workspace.
+                            راقب أداء المحادثات، نتائج الحملات، وصحة زمن الاستجابة في مساحة العمل.
                         </p>
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-[11px]">
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">
                             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                            Live
+                            مباشر
                         </span>
                         {meta?.generatedAt && (
                             <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
-                                Updated at{" "}
+                                آخر تحديث{" "}
                                 {new Date(meta.generatedAt).toLocaleTimeString(
                                     [],
                                     {
@@ -180,8 +172,7 @@ const AnalyticsView = () => {
                             </span>
                         )}
                         <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-white border border-slate-200 text-slate-500">
-                            Last {meta?.window?.volumeLastNDays ?? 7} days of
-                            activity
+                            آخر {meta?.window?.volumeLastNDays ?? 7} أيام
                         </span>
                     </div>
                 </div>
@@ -198,29 +189,27 @@ const AnalyticsView = () => {
                     ))}
                 </div>
 
-                {/* Main grid: volume + response */}
+                {/* Message Volume */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                    {/* Message Volume */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <h2 className="text-sm font-semibold text-slate-900">
-                                    Message Volume (Last{" "}
-                                    {meta?.window?.volumeLastNDays ?? 7} Days)
+                                    حجم الرسائل (آخر{" "}
+                                    {meta?.window?.volumeLastNDays ?? 7} أيام)
                                 </h2>
                                 <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Daily inbound and outbound messages across
-                                    all conversations.
+                                    الرسائل الواردة والصادرة يوميًا عبر جميع المحادثات.
                                 </p>
                             </div>
                             <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
-                                Total: {numberFormatter.format(totalMessages)}
+                                الإجمالي: {numberFormatter.format(totalMessages)}
                             </span>
                         </div>
 
                         {messageVolume.length === 0 ? (
                             <p className="text-xs text-slate-400">
-                                No messages were sent in the selected window.
+                                لا توجد رسائل في الفترة المحددة.
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -289,50 +278,47 @@ const AnalyticsView = () => {
                             </div>
                         )}
 
-                        {/* Legend */}
                         <div className="flex items-center gap-4 mt-4 text-[11px] text-slate-500">
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                <span>Agent messages</span>
+                                <span>رسائل الموظفين</span>
                             </div>
                             <div className="flex items-center gap-1.5">
                                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                                <span>Customer messages</span>
+                                <span>رسائل العملاء</span>
                             </div>
                         </div>
                     </div>
 
-                    {/* Response Time Performance */}
+                    {/* Response Time */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <h2 className="text-sm font-semibold text-slate-900">
-                                    Response Time Performance
+                                    أداء زمن الاستجابة
                                 </h2>
                                 <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Time between a customer message and the next
-                                    agent reply.
+                                    الوقت بين رسالة العميل وردّ الموظف التالي.
                                 </p>
                             </div>
                             <span className="text-[11px] px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200 text-slate-500">
-                                Sample: {responseSample} reply pairs
+                                العيّنة: {responseSample} رد
                             </span>
                         </div>
 
                         {responseSample === 0 ? (
                             <p className="text-xs text-slate-400">
-                                Not enough recent data to calculate response
-                                times.
+                                لا توجد بيانات كافية لحساب زمن الاستجابة.
                             </p>
                         ) : (
                             <div className="space-y-3">
                                 <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-emerald-50 to-emerald-100/60 border border-emerald-100">
                                     <div>
                                         <p className="text-[11px] font-semibold text-emerald-800">
-                                            Average Response
+                                            متوسط الاستجابة
                                         </p>
                                         <p className="text-[10px] text-emerald-700/80">
-                                            Typical agent reply time
+                                            الوقت النموذجي للرد
                                         </p>
                                     </div>
                                     <span className="text-lg font-bold text-emerald-800">
@@ -345,10 +331,10 @@ const AnalyticsView = () => {
                                 <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-sky-50 to-sky-100/60 border border-sky-100">
                                     <div>
                                         <p className="text-[11px] font-semibold text-sky-800">
-                                            Median Response
+                                            الوسيط
                                         </p>
                                         <p className="text-[10px] text-sky-700/80">
-                                            Half of replies are faster than this
+                                            نصف الردود أسرع من هذا
                                         </p>
                                     </div>
                                     <span className="text-lg font-bold text-sky-800">
@@ -361,10 +347,10 @@ const AnalyticsView = () => {
                                 <div className="flex items-center justify-between p-3 rounded-xl bg-gradient-to-r from-fuchsia-50 to-fuchsia-100/60 border border-fuchsia-100">
                                     <div>
                                         <p className="text-[11px] font-semibold text-fuchsia-800">
-                                            P90 Response
+                                            استجابة P90
                                         </p>
                                         <p className="text-[10px] text-fuchsia-700/80">
-                                            90% of replies are under this
+                                            90% من الردود أسرع من هذا
                                         </p>
                                     </div>
                                     <span className="text-lg font-bold text-fuchsia-800">
@@ -378,25 +364,24 @@ const AnalyticsView = () => {
                     </div>
                 </div>
 
-                {/* Bottom grid: broadcasts + split + insights */}
+                {/* Broadcasts + Insights */}
                 <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
-                    {/* Broadcast campaigns */}
                     <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5 xl:col-span-2">
                         <div className="flex items-center justify-between mb-4">
                             <div>
                                 <h2 className="text-sm font-semibold text-slate-900">
-                                    Broadcast Campaigns
+                                    حملات البث
                                 </h2>
                                 <p className="text-[11px] text-slate-500 mt-0.5">
-                                    Performance of the most recent campaigns.
+                                    أداء آخر الحملات المُرسلة.
                                 </p>
                             </div>
                             <div className="flex flex-col items-end gap-1 text-[11px] text-slate-500">
                                 <span className="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
-                                    Batches: {totalBroadcastBatches}
+                                    الدُفعات: {totalBroadcastBatches}
                                 </span>
                                 <span className="px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200">
-                                    Messages:{" "}
+                                    الرسائل:{" "}
                                     {numberFormatter.format(
                                         totalBroadcastMessages
                                     )}
@@ -406,7 +391,7 @@ const AnalyticsView = () => {
 
                         {lastCampaigns.length === 0 ? (
                             <p className="text-xs text-slate-400">
-                                No broadcast campaigns have been sent yet.
+                                لم يتم إرسال أي حملات حتى الآن.
                             </p>
                         ) : (
                             <div className="space-y-3">
@@ -426,8 +411,7 @@ const AnalyticsView = () => {
                                                         {c.name}
                                                     </span>
                                                     <span className="text-[10px] text-slate-500">
-                                                        Template{" "}
-                                                        {c.templateName} ·{" "}
+                                                        القالب {c.templateName} ·{" "}
                                                         {c.language}
                                                     </span>
                                                 </div>
@@ -444,7 +428,13 @@ const AnalyticsView = () => {
                                                             : "bg-slate-50 text-slate-600 border-slate-200"
                                                     }`}
                                                 >
-                                                    {c.status}
+                                                    {c.status === "completed"
+                                                        ? "اكتملت"
+                                                        : c.status === "processing"
+                                                        ? "جارٍ المعالجة"
+                                                        : c.status === "failed"
+                                                        ? "فشلت"
+                                                        : c.status}
                                                 </span>
                                             </div>
 
@@ -453,14 +443,14 @@ const AnalyticsView = () => {
                                                     {numberFormatter.format(
                                                         c.success
                                                     )}{" "}
-                                                    delivered /{" "}
+                                                    تم إرسالها /{" "}
                                                     {numberFormatter.format(
                                                         c.total
                                                     )}{" "}
-                                                    total
+                                                    إجمالي
                                                 </span>
                                                 <span className="font-medium text-slate-700">
-                                                    {rate.toFixed(1)}% success
+                                                    {rate.toFixed(1)}% نجاح
                                                 </span>
                                             </div>
 
@@ -482,23 +472,22 @@ const AnalyticsView = () => {
                         )}
                     </div>
 
-                    {/* Message Split + Insights */}
+                    {/* Split + Insights */}
                     <div className="space-y-4">
-                        {/* Message split */}
                         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm/50 shadow-slate-100 p-5">
                             <h2 className="text-sm font-semibold text-slate-900 mb-3">
-                                Message Split
+                                تقسيم الرسائل
                             </h2>
 
                             {totalMessages === 0 ? (
                                 <p className="text-xs text-slate-400">
-                                    No messages yet to analyse split.
+                                    لا توجد رسائل لتحليل التقسيم.
                                 </p>
                             ) : (
                                 <>
                                     <div className="flex items-center justify-between mb-2">
                                         <span className="text-xs text-slate-500">
-                                            Total
+                                            الإجمالي
                                         </span>
                                         <span className="text-sm font-semibold text-slate-900">
                                             {numberFormatter.format(
@@ -532,7 +521,7 @@ const AnalyticsView = () => {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5 text-slate-600">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
-                                                <span>Agent messages</span>
+                                                <span>رسائل الموظفين</span>
                                             </div>
                                             <span className="font-medium text-slate-900">
                                                 {numberFormatter.format(
@@ -545,7 +534,7 @@ const AnalyticsView = () => {
                                         <div className="flex items-center justify-between">
                                             <div className="flex items-center gap-1.5 text-slate-600">
                                                 <span className="w-2.5 h-2.5 rounded-full bg-blue-500" />
-                                                <span>Customer messages</span>
+                                                <span>رسائل العملاء</span>
                                             </div>
                                             <span className="font-medium text-slate-900">
                                                 {numberFormatter.format(
@@ -559,15 +548,12 @@ const AnalyticsView = () => {
                             )}
                         </div>
 
-                        {/* Insights */}
                         <div className="bg-slate-900 rounded-2xl text-slate-50 p-5">
                             <h2 className="text-sm font-semibold mb-2">
-                                Insights
+                                لمحات سريعة
                             </h2>
                             <p className="text-[11px] text-slate-300 mb-3">
-                                Quick takeaways generated from the current
-                                window. These are purely informational and
-                                don&apos;t affect any data.
+                                استنتاجات سريعة من الفترة الحالية. هذه المعلومات للاطلاع فقط.
                             </p>
 
                             <ul className="space-y-2 text-[11px]">
@@ -575,13 +561,13 @@ const AnalyticsView = () => {
                                     <li className="flex gap-2">
                                         <span className="mt-0.5 w-1 h-1 rounded-full bg-emerald-400 flex-shrink-0" />
                                         <span>
-                                            Your busiest day is{" "}
+                                            أكثر يوم نشاطًا هو{" "}
                                             <span className="font-semibold">
                                                 {busiestDay.label}
                                             </span>{" "}
-                                            with{" "}
+                                            بعدد{" "}
                                             <span className="font-semibold">
-                                                {busiestDay.total} messages
+                                                {busiestDay.total} رسالة
                                             </span>
                                             .
                                         </span>
@@ -592,12 +578,10 @@ const AnalyticsView = () => {
                                     <li className="flex gap-2">
                                         <span className="mt-0.5 w-1 h-1 rounded-full bg-sky-400 flex-shrink-0" />
                                         <span>
-                                            You&apos;re averaging{" "}
+                                            متوسط الرسائل اليومي:{" "}
                                             <span className="font-semibold">
-                                                {avgDailyMessages.toFixed(1)}{" "}
-                                                messages/day
-                                            </span>{" "}
-                                            in this period.
+                                                {avgDailyMessages.toFixed(1)} رسالة/يوم
+                                            </span>
                                         </span>
                                     </li>
                                 )}
@@ -607,14 +591,13 @@ const AnalyticsView = () => {
                                         <li className="flex gap-2">
                                             <span className="mt-0.5 w-1 h-1 rounded-full bg-fuchsia-400 flex-shrink-0" />
                                             <span>
-                                                Current average response time is{" "}
+                                                متوسط زمن الاستجابة الحالي هو{" "}
                                                 <span className="font-semibold">
                                                     {formatDuration(
                                                         responseTime.avgSeconds
                                                     )}
                                                 </span>
-                                                . Tightening this usually
-                                                increases customer satisfaction.
+                                                . تحسين هذا يزيد رضا العملاء.
                                             </span>
                                         </li>
                                     )}
@@ -623,19 +606,17 @@ const AnalyticsView = () => {
                                     <li className="flex gap-2">
                                         <span className="mt-0.5 w-1 h-1 rounded-full bg-amber-400 flex-shrink-0" />
                                         <span>
-                                            You&apos;ve sent{" "}
+                                            تم إرسال{" "}
                                             <span className="font-semibold">
-                                                {totalBroadcastBatches}{" "}
-                                                broadcast campaigns
+                                                {totalBroadcastBatches} حملة بث
                                             </span>{" "}
-                                            with{" "}
+                                            بمجموع{" "}
                                             <span className="font-semibold">
                                                 {numberFormatter.format(
                                                     totalBroadcastMessages
-                                                )}{" "}
-                                                messages
+                                                )}
                                             </span>{" "}
-                                            in total.
+                                            رسالة.
                                         </span>
                                     </li>
                                 )}
@@ -645,15 +626,14 @@ const AnalyticsView = () => {
                                     responseSample === 0 &&
                                     totalBroadcastBatches === 0 && (
                                         <li className="text-[11px] text-slate-300">
-                                            Start talking to customers or send a
-                                            first broadcast, and this area will
-                                            highlight what&apos;s happening.
+                                            ابدأ المحادثة مع العملاء أو أرسل حملة، وستظهر هنا الإحصائيات فورًا.
                                         </li>
                                     )}
                             </ul>
                         </div>
                     </div>
                 </div>
+
             </div>
         </div>
     );
