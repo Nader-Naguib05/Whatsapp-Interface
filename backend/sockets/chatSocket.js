@@ -1,5 +1,7 @@
 // sockets/chatSocket.mjs
 import { Server } from "socket.io";
+import jwt from "jsonwebtoken";
+import { User } from "../models/user.model.js";
 import { Message } from "../models/message.model.js";
 import { Conversation } from "../models/conversation.model.js";
 import { sendText } from "../services/whatsapp.service.js";
@@ -11,10 +13,42 @@ export function setupSockets(server) {
     cors: { origin: "*" },
   });
 
-  io.on("connection", (socket) => {
-    console.log("Socket connected:", socket.id);
+  io.on("connection", async (socket) => {
+    console.log("🔥 Socket connected:", socket.id);
 
-    // Join / leave rooms
+    /* ------------------------------------
+     *  AUTHENTICATION
+     * ------------------------------------ */
+    try {
+      const token = socket.handshake.auth?.token;
+
+      if (!token) {
+        console.log("❌ No token provided to socket");
+        socket.disconnect();
+        return;
+      }
+
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      const user = await User.findById(decoded.id).select("name role");
+
+      if (!user) {
+        console.log("❌ Invalid user for socket");
+        socket.disconnect();
+        return;
+      }
+
+      socket.user = user;
+      console.log(`🔥 Socket authenticated as: ${user.name}`);
+
+    } catch (err) {
+      console.log("❌ Socket auth error:", err.message);
+      socket.disconnect();
+      return;
+    }
+
+    /* ------------------------------------
+     *  JOIN / LEAVE ROOMS
+     * ------------------------------------ */
     socket.on("joinConversation", (conversationId) => {
       socket.join(String(conversationId));
     });
@@ -23,9 +57,16 @@ export function setupSockets(server) {
       socket.leave(String(conversationId));
     });
 
-    // AGENT sends message
+    /* ------------------------------------
+     *  AGENT SENDS MESSAGE
+     * ------------------------------------ */
     socket.on("message:send", async ({ clientId, conversationId, text }) => {
       try {
+        if (!socket.user) {
+          console.log("❌ Unauthorized socket send");
+          return;
+        }
+
         const conv = await Conversation.findById(conversationId);
         if (!conv) return;
 
@@ -39,6 +80,7 @@ export function setupSockets(server) {
           from: "business",
           to: conv.phone,
           senderType: "agent",
+          senderName: socket.user.name,   // 🔥 ADDED
           body: text,
           status: "sent",
           msgId: waId,
@@ -56,15 +98,16 @@ export function setupSockets(server) {
           conversationId: String(conversationId),
           body: msg.body,
           senderType: "agent",
+          senderName: socket.user.name,   // 🔥 ADDED
           createdAt: msg.createdAt,
           status: msg.status,
           msgId: msg.msgId,
         };
 
-        // 1) Emit to the agent currently viewing the chat (room)
+        // Emit to agents viewing this conversation
         io.to(String(conversationId)).emit("messageAck", ackPayload);
 
-        // 2) Emit globally so sidebar updates for all agents
+        // Update sidebar for all agents
         io.emit("conversation:update", {
           id: conv._id,
           phone: conv.phone,
@@ -74,6 +117,7 @@ export function setupSockets(server) {
           unreadCount: conv.unreadCount || 0,
         });
 
+        // Global event for new message
         io.emit("newMessage", {
           conversation: {
             _id: conv._id,
@@ -84,8 +128,9 @@ export function setupSockets(server) {
             _id: msg._id,
             conversationId: String(conversationId),
             body: msg.body,
-            mediaUrl: null,
+            mediaUrl: msg.mediaUrl || null,
             senderType: "agent",
+            senderName: socket.user.name,   // 🔥 ADDED
             createdAt: msg.createdAt,
             status: msg.status,
             msgId: msg.msgId,
@@ -93,11 +138,13 @@ export function setupSockets(server) {
         });
 
       } catch (err) {
-        console.error("message:send socket error:", err);
+        console.error("❌ message:send socket error:", err);
       }
     });
 
-    socket.on("disconnect", () => {});
+    socket.on("disconnect", () => {
+      console.log(`⚠️ Socket disconnected: ${socket.id}`);
+    });
   });
 
   return io;
