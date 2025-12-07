@@ -10,6 +10,7 @@ if (!JWT_SECRET) {
 }
 
 export function requireAuth(req, res, next) {
+    console.log("🔥 requireAuth triggered. Headers:", req.headers);
   try {
     const authHeader = req.headers.authorization || "";
 
@@ -25,7 +26,6 @@ export function requireAuth(req, res, next) {
 
     const decoded = jwt.verify(token, JWT_SECRET);
 
-    // We know your token payload is: { id, role } :contentReference[oaicite:3]{index=3}
     req.user = {
       id: decoded.id,
       role: decoded.role,

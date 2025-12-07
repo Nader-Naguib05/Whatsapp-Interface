@@ -15,6 +15,7 @@ import broadcastRoutes from "./routes/broadcast.js";
 import mediaRoutes from "./routes/media.js";
 import analyticsRoutes from "./routes/analytics.js";
 import contactRoutes from "./routes/contact.js";
+import usersRoutes from "./routes/users.js";
 import { setupSockets } from './sockets/chatSocket.js';
 
 const app = express();
@@ -35,6 +36,7 @@ app.use('/media', mediaRoutes);
 app.use('/analytics', analyticsRoutes);
 app.use('/contacts', contactRoutes);
 app.use('/auth', authRoutes);
+app.use('/agents', usersRoutes);
 
 
 // connect db & sockets & start

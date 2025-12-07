@@ -5,6 +5,7 @@ import {
   BarChart3,
   Users,
   Settings,
+  UserCog, // NEW ICON
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -16,6 +17,7 @@ const moduleColors = {
   analytics: "bg-[#EDE9FE] text-[#6D28D9]",
   contacts: "bg-[#FEF9C3] text-[#CA8A04]",
   settings: "bg-[#F3F4F6] text-[#374151]",
+  agents: "bg-[#FFE4E6] text-[#E11D48]", // NEW
 };
 
 const modules = [
@@ -23,6 +25,7 @@ const modules = [
   { id: "broadcast", label: "Broadcast", icon: Radio },
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "contacts", label: "Contacts", icon: Users },
+  { id: "agents", label: "Agents", icon: UserCog }, // 🔥 NEW MODULE
   { id: "settings", label: "Settings", icon: Settings },
 ];
 
@@ -39,7 +42,7 @@ export default function ModulesHome({ onSelectModule }) {
     <div className="min-h-screen w-full bg-[#F2F3F5] flex flex-col">
 
       {/* Top Profile Header */}
-      <div className="px-5 py-6 bg-white shadow-sm  flex items-center justify-between">
+      <div className="px-5 py-6 bg-white shadow-sm flex items-center justify-between">
         
         {/* User Info */}
         <div className="flex items-center gap-4">

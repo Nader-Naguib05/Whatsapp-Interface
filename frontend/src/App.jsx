@@ -9,6 +9,7 @@ import ChatsModule from "./pages/WhatsAppDashboard";
 import BroadcastModule from "./modules/BroadcastModule";
 import AnalyticsModule from "./modules/AnalyticsModule";
 import ContactsModule from "./modules/ContactsModule";
+import AgentsModule from "./modules/Agents/AgentsHome";
 import SettingsModule from "./modules/SettingsModule";
 
 import ProtectedRoute from "./components/ProtectedRoute";
@@ -68,7 +69,14 @@ export default function App() {
               </ProtectedRoute>
             }
           />
-
+          <Route
+            path="/modules/agents"
+            element={
+              <ProtectedRoute>
+                <AgentsModule />
+              </ProtectedRoute>
+            }
+          />
           <Route
             path="/modules/settings"
             element={
