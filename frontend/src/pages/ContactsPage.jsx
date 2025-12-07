@@ -1,66 +1,74 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useCallback } from "react";
 import {
   Search,
   UserPlus,
   Phone,
-  Tag,
-  MessageSquare,
-  Calendar,
   Edit,
-  Trash2,
-  Download,
-  Upload,
-  Paperclip,
   CheckSquare,
   Square,
   Clock,
-  Filter,
   MessageCircle,
+  Paperclip,
 } from "lucide-react";
 
-// Accent color
 const ACCENT = "text-[#25D366]";
-const ACCENT_BG = "bg-[#25D366]";
 
-const Avatar = ({ name, size = 48 }) => {
-  const letters = name.split(" ").map((n) => n[0]).join("").toUpperCase();
+// -------------------------
+// AVATAR (optimized)
+// -------------------------
+const Avatar = React.memo(function Avatar({ name, size = 48 }) {
+  const letters = useMemo(() => {
+    if (!name) return "?";
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
+  }, [name]);
+
   return (
     <div
       className="rounded-full flex items-center justify-center text-white font-semibold shadow-sm"
       style={{
         width: size,
         height: size,
-        background:
-          "linear-gradient(135deg, #25D366 0%, #1EBE5E 100%)",
+        background: "linear-gradient(135deg, #25D366 0%, #1EBE5E 100%)",
         fontSize: size * 0.4,
       }}
     >
       {letters}
     </div>
   );
-};
+});
 
+// -------------------------
+// STATUS (Arabic)
+// -------------------------
 const STATUS_OPTIONS = [
-  { id: "lead", label: "Lead", color: "bg-blue-50 text-blue-700 border-blue-200" },
-  { id: "customer", label: "Customer", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
-  { id: "vip", label: "VIP", color: "bg-amber-50 text-amber-700 border-amber-200" },
+  { id: "lead", label: "مهتم", color: "bg-blue-50 text-blue-700 border-blue-200" },
+  { id: "customer", label: "عميل", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
+  { id: "vip", label: "عميل مميز", color: "bg-amber-50 text-amber-700 border-amber-200" },
 ];
 
 const getStatusStyle = (status) =>
   STATUS_OPTIONS.find((s) => s.id === status)?.color ||
   "bg-gray-50 text-gray-700 border-gray-200";
 
+// -------------------------
+// TIME FORMAT (Arabic)
+// -------------------------
 const formatTime = (ts) => {
-  if (!ts) return "Never";
+  if (!ts) return "لا يوجد تواصل";
   const diff = Date.now() - ts;
+
   const min = Math.floor(diff / 60000);
-  if (min < 1) return "Just now";
-  if (min < 60) return `${min} min ago`;
+  if (min < 1) return "الآن";
+  if (min < 60) return `${min} دقيقة`;
   const h = Math.floor(min / 60);
-  if (h < 24) return `${h} hours ago`;
+  if (h < 24) return `${h} ساعة`;
   const d = Math.floor(h / 24);
-  if (d < 7) return `${d} days ago`;
-  return new Date(ts).toLocaleDateString();
+  if (d < 7) return `${d} يوم`;
+  return new Date(ts).toLocaleDateString("ar-EG");
 };
 
 const ContactsPage = ({ onOpenConversation }) => {
@@ -76,56 +84,62 @@ const ContactsPage = ({ onOpenConversation }) => {
 
   const [selectedIds, setSelectedIds] = useState(new Set());
 
-  // Mock Data
+  // -------------------------
+  // Mock data — remove when connecting to API
+  // -------------------------
   useEffect(() => {
     const now = Date.now();
     const fake = [
       {
         _id: "1",
-        name: "John Doe",
-        phone: "+201234567890",
+        name: "أحمد السيد",
+        phone: "+201015557788",
         status: "customer",
-        tags: ["Returning", "VIP"],
-        notes: "Prefers morning delivery.",
-        lastContact: now - 20 * 60 * 1000,
-        createdAt: now - 20 * 24 * 60 * 60 * 1000,
-        lastMessagePreview: "Thanks, that helped a lot!",
+        tags: ["مميز"],
+        notes: "يتواصل غالباً صباحاً.",
+        lastContact: now - 1000 * 60 * 40,
+        createdAt: now - 1000 * 60 * 60 * 24 * 10,
+        lastMessagePreview: "شكراً جداً ❤️",
         activity: [
           {
             id: "x1",
             type: "message",
-            label: "Agent: Confirmed delivery date.",
-            timestamp: now - 25 * 60 * 1000,
+            label: "تم تحديد موعد للتواصل.",
+            timestamp: now - 1000 * 60 * 50,
           },
         ],
-        attachments: [
-          { id: "a1", name: "invoice-204.pdf", timestamp: now - 3 * 24 * 60 * 60 * 1000 },
-        ],
-      },
-      {
-        _id: "2",
-        name: "Sarah Smith",
-        phone: "+201111223344",
-        status: "lead",
-        tags: ["New"],
-        notes: "",
-        lastContact: now - 2 * 60 * 60 * 1000,
-        createdAt: now - 5 * 24 * 60 * 60 * 1000,
-        lastMessagePreview: "Do you have monthly pricing?",
-        activity: [],
         attachments: [],
       },
     ];
     setContacts(fake);
-    setActiveId("1");
+    setActiveId(fake[0]._id);
     setNotesDraft(fake[0].notes);
   }, []);
 
-  const active = useMemo(() => contacts.find((c) => c._id === activeId), [contacts, activeId]);
+  // -------------------------
+  // Active contact
+  // -------------------------
+  const active = useMemo(
+    () => contacts.find((c) => c._id === activeId),
+    [contacts, activeId]
+  );
 
-  // Filtering
+  // -------------------------
+  // Bulk selection
+  // -------------------------
+  const toggleBulk = useCallback((id) => {
+    setSelectedIds((prev) => {
+      const copy = new Set(prev);
+      copy.has(id) ? copy.delete(id) : copy.add(id);
+      return copy;
+    });
+  }, []);
+
+  // -------------------------
+  // Filtering + Sorting (optimized)
+  // -------------------------
   const filtered = useMemo(() => {
-    let list = [...contacts];
+    let list = contacts;
 
     if (statusFilter !== "all") {
       list = list.filter((c) => c.status === statusFilter);
@@ -137,44 +151,39 @@ const ContactsPage = ({ onOpenConversation }) => {
         (c) =>
           c.name.toLowerCase().includes(q) ||
           c.phone.includes(q) ||
-          c.tags.some((t) => t.toLowerCase().includes(q))
+          (c.tags || []).some((t) => t.toLowerCase().includes(q))
       );
     }
 
+    const sorted = [...list];
     if (sortBy === "recent") {
-      list.sort((a, b) => (b.lastContact || 0) - (a.lastContact || 0));
+      sorted.sort((a, b) => (b.lastContact || 0) - (a.lastContact || 0));
     } else if (sortBy === "alpha") {
-      list.sort((a, b) => a.name.localeCompare(b.name));
+      sorted.sort((a, b) => a.name.localeCompare(b.name));
     }
 
-    return list;
+    return sorted;
   }, [contacts, search, statusFilter, sortBy]);
 
-  const toggleBulk = (id) => {
-    setSelectedIds((prev) => {
-      const copy = new Set(prev);
-      if (copy.has(id)) copy.delete(id);
-      else copy.add(id);
-      return copy;
-    });
-  };
-
+  // -------------------------
+  // MAIN RENDER
+  // -------------------------
   return (
     <div className="flex h-full bg-[#F7F8FA]">
 
-      {/* LEFT SIDE — Contacts List */}
-      <div className="w-[380px] border-r border-gray-200 bg-white/70 backdrop-blur-xl shadow-sm flex flex-col">
+      {/* LEFT SIDE */}
+      <div className="w-[380px] border-r border-gray-200 bg-white flex flex-col">
 
         {/* Header */}
-        <div className="px-5 py-4 border-b border-gray-200 bg-white/70 backdrop-blur-xl">
+        <div className="px-5 py-4 border-b border-gray-200">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-[20px] font-semibold text-gray-900">Contacts</h2>
-              <p className="text-[13px] text-gray-500">{contacts.length} total</p>
+              <h2 className="text-[20px] font-semibold text-gray-900">جهات الاتصال</h2>
+              <p className="text-[13px] text-gray-500">{contacts.length} إجمالي</p>
             </div>
 
             <button className="flex items-center gap-2 px-4 h-[40px] rounded-xl bg-[#25D366] text-white font-medium shadow-sm hover:bg-[#1EBE5E] transition">
-              <UserPlus className="w-4 h-4" /> New
+              <UserPlus className="w-4 h-4" /> جديد
             </button>
           </div>
         </div>
@@ -186,8 +195,8 @@ const ContactsPage = ({ onOpenConversation }) => {
             <input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search name, phone, or tag"
-              className="w-full h-[42px] pl-10 pr-3 rounded-xl bg-gray-100 border border-gray-300 text-[15px] focus:outline-none focus:ring-2 focus:ring-[#25D366]/50"
+              placeholder="ابحث بالاسم، الرقم، أو الوسم"
+              className="w-full h-[42px] pl-10 pr-3 rounded-xl bg-gray-100 border border-gray-300 text-[15px]"
             />
           </div>
         </div>
@@ -202,8 +211,8 @@ const ContactsPage = ({ onOpenConversation }) => {
               <div
                 key={c._id}
                 className={`px-5 py-4 border-b border-gray-100 cursor-pointer transition
-                  ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}
-                `}
+                ${isActive ? "bg-gray-100" : "hover:bg-gray-50"}
+              `}
                 onClick={() => {
                   setActiveId(c._id);
                   setNotesDraft(c.notes);
@@ -211,6 +220,7 @@ const ContactsPage = ({ onOpenConversation }) => {
                 }}
               >
                 <div className="flex items-start gap-4">
+
                   <div onClick={(e) => { e.stopPropagation(); toggleBulk(c._id); }}>
                     {selected ? (
                       <CheckSquare className="w-5 h-5 text-[#25D366]" />
@@ -232,34 +242,38 @@ const ContactsPage = ({ onOpenConversation }) => {
                     </p>
 
                     <div className="flex gap-2 mt-2">
-                      {c.tags.map((t) => (
-                        <span key={t} className="px-3 py-1 rounded-full bg-gray-100 text-[12px] text-gray-700 border border-gray-200">
+                      {(c.tags || []).map((t) => (
+                        <span
+                          key={t}
+                          className="px-3 py-1 rounded-full bg-gray-100 text-[12px] text-gray-700 border border-gray-200"
+                        >
                           {t}
                         </span>
                       ))}
                     </div>
                   </div>
+
                 </div>
               </div>
             );
           })}
 
           {filtered.length === 0 && (
-            <div className="text-gray-400 text-center py-10">No contacts found.</div>
+            <div className="text-gray-400 text-center py-10">لا يوجد نتائج.</div>
           )}
         </div>
       </div>
 
-      {/* RIGHT SIDE — Contact Detail */}
+      {/* RIGHT SIDE */}
       <div className="flex-1 p-8 overflow-y-auto">
 
         {!active ? (
-          <div className="text-center text-gray-500">Select a contact</div>
+          <div className="text-center text-gray-500">اختر جهة اتصال</div>
         ) : (
           <div className="space-y-8">
 
             {/* Header */}
-            <div className="p-6 bg-white/70 backdrop-blur-xl border border-gray-200 rounded-3xl shadow-sm">
+            <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
               <div className="flex items-center justify-between">
 
                 <div className="flex items-center gap-5">
@@ -276,7 +290,7 @@ const ContactsPage = ({ onOpenConversation }) => {
                 <div className="flex flex-col items-end gap-3">
                   <div className="flex items-center gap-2">
                     <span className={`px-3 py-1 rounded-full border text-[13px] ${getStatusStyle(active.status)}`}>
-                      {active.status.toUpperCase()}
+                      {STATUS_OPTIONS.find((s) => s.id === active.status)?.label}
                     </span>
 
                     <select
@@ -284,9 +298,7 @@ const ContactsPage = ({ onOpenConversation }) => {
                       onChange={(e) =>
                         setContacts((prev) =>
                           prev.map((c) =>
-                            c._id === active._id
-                              ? { ...c, status: e.target.value }
-                              : c
+                            c._id === active._id ? { ...c, status: e.target.value } : c
                           )
                         )
                       }
@@ -299,62 +311,62 @@ const ContactsPage = ({ onOpenConversation }) => {
                   </div>
 
                   <button
-                    onClick={() => onOpenConversation && onOpenConversation(active)}
+                    onClick={() => onOpenConversation?.(active)}
                     className="flex items-center gap-2 px-4 h-[44px] bg-[#25D366] text-white rounded-xl font-medium shadow-sm hover:bg-[#1EBE5E] transition"
                   >
                     <MessageCircle className="w-5 h-5" />
-                    Open conversation
+                    فتح المحادثة
                   </button>
                 </div>
 
               </div>
             </div>
 
-            {/* Tags, Notes, Activity, Attachments */}
-            {/* ——— Simplified for beauty & clarity ——— */}
-
+            {/* Tags + Notes */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-              {/* TAGS */}
-              <div className="p-6 bg-white/70 backdrop-blur-xl border border-gray-200 rounded-3xl shadow-sm">
-                <p className="text-[12px] uppercase text-gray-500 mb-3">Tags</p>
+              {/* Tags */}
+              <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
+                <p className="text-[12px] text-gray-500 mb-3">الوسوم</p>
                 <div className="flex flex-wrap gap-3">
-                  {active.tags.map((t) => (
+                  {(active.tags || []).map((t) => (
                     <span key={t} className="px-3 py-1.5 bg-gray-100 border border-gray-300 rounded-lg text-[14px]">
                       {t}
                     </span>
                   ))}
+
                   <button className="px-3 py-1.5 border border-gray-300 text-gray-600 rounded-lg hover:bg-gray-100 text-[14px]">
-                    + Add Tag
+                    + إضافة وسم
                   </button>
                 </div>
               </div>
 
-              {/* NOTES */}
-              <div className="lg:col-span-2 p-6 bg-white/70 backdrop-blur-xl border border-gray-200 rounded-3xl shadow-sm">
+              {/* Notes */}
+              <div className="lg:col-span-2 p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
                 <div className="flex items-center justify-between mb-3">
-                  <p className="text-[12px] uppercase text-gray-500">Notes</p>
+                  <p className="text-[12px] text-gray-500">الملاحظات</p>
 
                   {!isEditingNotes && (
                     <button
                       onClick={() => setIsEditingNotes(true)}
                       className="flex items-center gap-1 text-[#25D366] text-[14px]"
                     >
-                      <Edit className="w-4 h-4" /> Edit
+                      <Edit className="w-4 h-4" />
+                      تعديل
                     </button>
                   )}
                 </div>
 
                 {!isEditingNotes ? (
                   <p className="text-[15px] text-gray-700 min-h-[80px] whitespace-pre-wrap">
-                    {active.notes || "No notes yet."}
+                    {active.notes || "لا توجد ملاحظات بعد."}
                   </p>
                 ) : (
                   <>
                     <textarea
                       value={notesDraft}
                       onChange={(e) => setNotesDraft(e.target.value)}
-                      className="w-full min-h-[100px] rounded-xl border-gray-300 bg-white p-4 text-[15px] text-gray-700 focus:outline-none focus:ring-2 focus:ring-[#25D366]/50"
+                      className="w-full min-h-[100px] rounded-xl border-gray-300 bg-white p-4 text-[15px] text-gray-700 focus:outline-none"
                     />
                     <div className="flex justify-end gap-3 mt-3">
                       <button
@@ -364,37 +376,36 @@ const ContactsPage = ({ onOpenConversation }) => {
                         }}
                         className="h-[40px] px-4 border border-gray-300 rounded-xl"
                       >
-                        Cancel
+                        إلغاء
                       </button>
                       <button
                         onClick={() => {
                           setContacts((prev) =>
                             prev.map((c) =>
-                              c._id === active._id
-                                ? { ...c, notes: notesDraft }
-                                : c
+                              c._id === active._id ? { ...c, notes: notesDraft } : c
                             )
                           );
                           setIsEditingNotes(false);
                         }}
                         className="h-[40px] px-5 bg-[#25D366] text-white rounded-xl shadow-sm"
                       >
-                        Save
+                        حفظ
                       </button>
                     </div>
                   </>
                 )}
               </div>
+
             </div>
 
-            {/* Bottom: Activity + Attachments */}
+            {/* Activity + Attachments */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
 
-              {/* ACTIVITY */}
-              <div className="lg:col-span-2 p-6 bg-white/70 backdrop-blur-xl border border-gray-200 rounded-3xl shadow-sm">
-                <p className="text-[12px] uppercase text-gray-500 mb-4">Activity</p>
-                {active.activity.length === 0 ? (
-                  <p className="text-gray-500 text-[14px]">No activity yet.</p>
+              {/* Activity */}
+              <div className="lg:col-span-2 p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
+                <p className="text-[12px] text-gray-500 mb-4">النشاط</p>
+                {(active.activity || []).length === 0 ? (
+                  <p className="text-gray-500 text-[14px]">لا يوجد نشاط.</p>
                 ) : (
                   <div className="space-y-4">
                     {active.activity.map((a) => (
@@ -412,21 +423,19 @@ const ContactsPage = ({ onOpenConversation }) => {
                 )}
               </div>
 
-              {/* ATTACHMENTS */}
-              <div className="p-6 bg-white/70 backdrop-blur-xl border border-gray-200 rounded-3xl shadow-sm">
-                <p className="text-[12px] uppercase text-gray-500 mb-4">Attachments</p>
-                {active.attachments.length === 0 ? (
-                  <p className="text-[14px] text-gray-500">No files attached.</p>
+              {/* Attachments */}
+              <div className="p-6 bg-white border border-gray-200 rounded-3xl shadow-sm">
+                <p className="text-[12px] text-gray-500 mb-4">الملفات المرفقة</p>
+
+                {(active.attachments || []).length === 0 ? (
+                  <p className="text-[14px] text-gray-500">لا توجد ملفات.</p>
                 ) : (
                   <ul className="space-y-2 text-[14px]">
                     {active.attachments.map((f) => (
-                      <li
-                        key={f.id}
-                        className="flex items-center justify-between py-2 border-b border-gray-100"
-                      >
+                      <li key={f.id} className="flex items-center justify-between py-2 border-b border-gray-100">
                         <span>{f.name}</span>
                         <span className="text-gray-400 text-[12px]">
-                          {new Date(f.timestamp).toLocaleDateString()}
+                          {new Date(f.timestamp).toLocaleDateString("ar-EG")}
                         </span>
                       </li>
                     ))}
@@ -435,7 +444,7 @@ const ContactsPage = ({ onOpenConversation }) => {
 
                 <button className="mt-4 w-full h-[44px] border border-gray-300 rounded-xl text-[14px] hover:bg-gray-100">
                   <Paperclip className="w-4 h-4 inline mr-1" />
-                  Attach file
+                  إرفاق ملف
                 </button>
               </div>
 
