@@ -80,7 +80,7 @@ export async function sendTextController(req, res) {
 
     const metaRes = await sendText(targetPhone, body);
     const waId = metaRes?.data?.messages?.[0]?.id || null;
-
+    console.log(req.user);
     const msg = await Message.create({
       conversationId: conv._id,
       from: "business",
