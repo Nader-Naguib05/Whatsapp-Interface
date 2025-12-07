@@ -420,12 +420,34 @@ const ChatLayout = ({
         return () => document.removeEventListener("mousedown", close);
     }, [isMenuOpen]);
 
-    /* ---------------------------------------------------
-       MOBILE BACK BUTTON
-  --------------------------------------------------- */
-    const handleBack = () => {
-        setShowChatOnMobile(false);
-    };
+    async function updateConversationTag(tag) {
+        try {
+            const token = localStorage.getItem("token");
+
+            await fetch(
+                `${
+                    import.meta.env.VITE_API_URL
+                }/conversations/${activeConversationId}/tag`,
+                {
+                    method: "PATCH",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: `Bearer ${token}`,
+                    },
+                    body: JSON.stringify({ tag }),
+                }
+            );
+
+            setIsMenuOpen(false);
+
+            // Refresh your conversation list
+            if (typeof onSelectConversation === "function") {
+                onSelectConversation(activeConversationId);
+            }
+        } catch (err) {
+            console.error("Failed to update tag:", err);
+        }
+    }
 
     /* ---------------------------------------------------
        RENDER
@@ -524,6 +546,20 @@ const ChatLayout = ({
                                     }
                                 >
                                     <div className="wa-avatar">{name[0]}</div>
+                                    {conv.tag && conv.tag !== "بدون" && (
+                                        <span
+                                            style={{
+                                                fontSize: "10px",
+                                                padding: "2px 6px",
+                                                marginBottom: "4px",
+                                                borderRadius: "6px",
+                                                background: "#eee",
+                                                alignSelf: "flex-start",
+                                            }}
+                                        >
+                                            {conv.tag}
+                                        </span>
+                                    )}
 
                                     <div className="wa-conversation-main">
                                         <div className="wa-conversation-top-row">
