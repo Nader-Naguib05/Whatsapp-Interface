@@ -9,8 +9,9 @@ const StatCard = ({ value, label, helperText, icon: Icon, tone = "primary" }) =>
   };
 
   return (
-    <div className="bg-white rounded-lg p-6 shadow-sm border">
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-lg p-6 shadow-sm border text-right" dir="rtl">
+      {/* Header (reversed flex for RTL) */}
+      <div className="flex items-center justify-between mb-3 flex-row-reverse">
         <div className={`${colors[tone]} p-3 rounded-lg`}>
           {Icon && <Icon className="w-6 h-6 text-white" />}
         </div>
@@ -18,8 +19,11 @@ const StatCard = ({ value, label, helperText, icon: Icon, tone = "primary" }) =>
 
       <h3 className="text-2xl font-bold text-gray-900">{value}</h3>
       <p className="text-sm text-gray-600 mt-1">{label}</p>
+
       {helperText && (
-        <p className="text-xs text-gray-400 mt-1">{helperText}</p>
+        <p className="text-xs text-gray-400 mt-1">
+          {helperText}
+        </p>
       )}
     </div>
   );
