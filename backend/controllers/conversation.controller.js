@@ -41,3 +41,28 @@ export async function resetUnreadController(req, res) {
     return res.status(500).json({ error: "Failed to reset unread" });
   }
 }
+
+export const updateTag = async (req, res) => {
+    try {
+        const { tag } = req.body;
+
+        if (!["بدون", "مشاكل", "زبائن", "كباتن"].includes(tag)) {
+            return res.status(400).json({ message: "Invalid tag." });
+        }
+
+        const conv = await Conversation.findByIdAndUpdate(
+            req.params.id,
+            { tag },
+            { new: true }
+        );
+
+        if (!conv) {
+            return res.status(404).json({ message: "Conversation not found" });
+        }
+
+        res.json(conv);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "Server error" });
+    }
+};

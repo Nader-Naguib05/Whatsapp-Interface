@@ -59,7 +59,6 @@ function getMessageKey(msg, idx) {
     return msg.clientId || msg._id || msg.id || idx;
 }
 
-
 /* ---------------------------------------------------
    MESSAGE BUBBLE (FULL UPDATED VERSION)
 --------------------------------------------------- */
@@ -194,9 +193,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                                 <span className="wa-sending-dot"></span>
                             )}
                             {status === "sent" && <Check size={14} />}
-                            {status === "delivered" && (
-                                <CheckCheck size={14} />
-                            )}
+                            {status === "delivered" && <CheckCheck size={14} />}
                             {status === "read" && (
                                 <CheckCheck
                                     size={14}
@@ -218,7 +215,6 @@ function MessageBubble({ msg, onRetryMessage }) {
         </div>
     );
 }
-
 
 /* ---------------------------------------------------
        MAIN CHAT LAYOUT
@@ -256,6 +252,7 @@ const ChatLayout = ({
 }) => {
     const messagesRef = useRef(null);
     const bottomRef = useRef(null);
+    const [tagFilter, setTagFilter] = useState("الكل");
 
     const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
 
@@ -450,6 +447,34 @@ const ChatLayout = ({
                     <h1 className="wa-app-title">Inbox</h1>
                 </div>
 
+                {/* TAG FILTER */}
+                <div
+                    className="wa-tag-filter"
+                    style={{
+                        display: "flex",
+                        gap: "6px",
+                        padding: "10px",
+                    }}
+                >
+                    {["الكل", "بدون", "مشاكل", "زبائن", "كباتن"].map((tag) => (
+                        <button
+                            key={tag}
+                            onClick={() => setTagFilter(tag)}
+                            style={{
+                                flex: 1,
+                                padding: "6px",
+                                fontSize: "12px",
+                                borderRadius: "6px",
+                                border: "1px solid #ddd",
+                                background:
+                                    tagFilter === tag ? "#dbeafe" : "white",
+                            }}
+                        >
+                            {tag}
+                        </button>
+                    ))}
+                </div>
+
                 <div className="wa-search-wrapper">
                     <Search className="wa-search-icon" size={16} />
                     <input
@@ -462,62 +487,70 @@ const ChatLayout = ({
                 </div>
 
                 <div className="wa-conversation-list">
-                    {conversations.map((conv) => {
-                        const id = conv._id || conv.id;
-                        const name =
-                            conv.name ||
-                            conv.displayName ||
-                            conv.phone ||
-                            "Unknown";
+                    {conversations
+                        .filter((conv) => {
+                            if (tagFilter === "الكل") return true;
+                            return conv.tag === tagFilter;
+                        })
+                        .map((conv) => {
+                            const id = conv._id || conv.id;
+                            const name =
+                                conv.name ||
+                                conv.displayName ||
+                                conv.phone ||
+                                "Unknown";
 
-                        const lastMsg = conv.lastMessage || "";
-                        const lastAt =
-                            conv.lastMessageAt ||
-                            conv.updatedAt ||
-                            conv.createdAt;
+                            const lastMsg = conv.lastMessage || "";
+                            const lastAt =
+                                conv.lastMessageAt ||
+                                conv.updatedAt ||
+                                conv.createdAt;
 
-                        const unread = conv.unread || conv.unreadCount || 0;
+                            const unread = conv.unread || conv.unreadCount || 0;
 
-                        return (
-                            <button
-                                key={id}
-                                onClick={() => {
-                                    onSelectConversation(id);
-                                    if (isMobile) setShowChatOnMobile(true);
-                                }}
-                                className={
-                                    "wa-conversation-item" +
-                                    (String(id) === String(activeConversationId)
-                                        ? " wa-conversation-item--active"
-                                        : "")
-                                }
-                            >
-                                <div className="wa-avatar">{name[0]}</div>
+                            return (
+                                <button
+                                    key={id}
+                                    onClick={() => {
+                                        onSelectConversation(id);
+                                        if (isMobile) setShowChatOnMobile(true);
+                                    }}
+                                    className={
+                                        "wa-conversation-item" +
+                                        (String(id) ===
+                                        String(activeConversationId)
+                                            ? " wa-conversation-item--active"
+                                            : "")
+                                    }
+                                >
+                                    <div className="wa-avatar">{name[0]}</div>
 
-                                <div className="wa-conversation-main">
-                                    <div className="wa-conversation-top-row">
-                                        <span className="wa-conversation-name">
-                                            {name}
-                                        </span>
-                                        <span className="wa-conversation-time">
-                                            {formatTime(lastAt)}
-                                        </span>
-                                    </div>
-
-                                    <div className="wa-conversation-bottom-row">
-                                        <span className="wa-conversation-preview">
-                                            {lastMsg}
-                                        </span>
-                                        {unread > 0 && (
-                                            <span className="wa-unread-badge">
-                                                {unread > 99 ? "99+" : unread}
+                                    <div className="wa-conversation-main">
+                                        <div className="wa-conversation-top-row">
+                                            <span className="wa-conversation-name">
+                                                {name}
                                             </span>
-                                        )}
+                                            <span className="wa-conversation-time">
+                                                {formatTime(lastAt)}
+                                            </span>
+                                        </div>
+
+                                        <div className="wa-conversation-bottom-row">
+                                            <span className="wa-conversation-preview">
+                                                {lastMsg}
+                                            </span>
+                                            {unread > 0 && (
+                                                <span className="wa-unread-badge">
+                                                    {unread > 99
+                                                        ? "99+"
+                                                        : unread}
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            </button>
-                        );
-                    })}
+                                </button>
+                            );
+                        })}
                 </div>
             </aside>
 
@@ -578,6 +611,35 @@ const ChatLayout = ({
 
                                 {isMenuOpen && (
                                     <div className="wa-header-menu">
+                                        <div
+                                            style={{
+                                                padding: "6px 10px",
+                                                fontSize: "12px",
+                                                opacity: 0.7,
+                                            }}
+                                        >
+                                            تغيـير الوسم
+                                        </div>
+
+                                        {[
+                                            "بدون",
+                                            "مشاكل",
+                                            "زبائن",
+                                            "كباتن",
+                                        ].map((tag) => (
+                                            <button
+                                                key={tag}
+                                                className="wa-header-menu-item"
+                                                onClick={() =>
+                                                    updateConversationTag(tag)
+                                                }
+                                            >
+                                                {tag}
+                                            </button>
+                                        ))}
+
+                                        <hr style={{ margin: "6px 0" }} />
+
                                         {!isInContacts ? (
                                             <button
                                                 className="wa-header-menu-item"
