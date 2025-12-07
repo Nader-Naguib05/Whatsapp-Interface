@@ -59,8 +59,9 @@ function getMessageKey(msg, idx) {
     return msg.clientId || msg._id || msg.id || idx;
 }
 
+
 /* ---------------------------------------------------
-   MESSAGE BUBBLE
+   MESSAGE BUBBLE (FULL UPDATED VERSION)
 --------------------------------------------------- */
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
@@ -79,10 +80,19 @@ function MessageBubble({ msg, onRetryMessage }) {
     const isSending = status === "sending" || status.startsWith("uploading-");
     const isFailed = status === "failed";
 
-    const isImage = mediaType.startsWith("image/");
-    const isVideo = mediaType.startsWith("video/");
-    const isAudio = mediaType.startsWith("audio/");
+    const isImage = mediaType?.startsWith("image/");
+    const isVideo = mediaType?.startsWith("video/");
+    const isAudio = mediaType?.startsWith("audio/");
     const isDocument = mediaUrl && !isImage && !isVideo && !isAudio;
+
+    /* -------------------------------------------
+       NEW: Display actual sender name
+       - Agent messages → show agent's name
+       - Customer messages → show "Customer"
+    ------------------------------------------- */
+    const displayedName = isOutgoing
+        ? msg.senderName || msg.agentName || "Agent"
+        : msg.customerName || "Customer";
 
     return (
         <div
@@ -101,6 +111,20 @@ function MessageBubble({ msg, onRetryMessage }) {
                         : "wa-message-bubble--incoming")
                 }
             >
+                {/* NEW: Sender name label */}
+                <div
+                    style={{
+                        fontSize: "11px",
+                        fontWeight: 600,
+                        marginBottom: "4px",
+                        opacity: 0.85,
+                        textAlign: isOutgoing ? "right" : "left",
+                    }}
+                >
+                    {displayedName}
+                </div>
+
+                {/* MEDIA */}
                 {mediaUrl && (
                     <div className="wa-message-media">
                         {isSending && (
@@ -155,8 +179,10 @@ function MessageBubble({ msg, onRetryMessage }) {
                     </div>
                 )}
 
+                {/* TEXT */}
                 {text && <div className="wa-message-text">{text}</div>}
 
+                {/* META (time + ticks) */}
                 <div className="wa-message-meta" title={timestamp}>
                     <span className="wa-message-time">
                         {formatTime(timestamp)}
@@ -168,7 +194,9 @@ function MessageBubble({ msg, onRetryMessage }) {
                                 <span className="wa-sending-dot"></span>
                             )}
                             {status === "sent" && <Check size={14} />}
-                            {status === "delivered" && <CheckCheck size={14} />}
+                            {status === "delivered" && (
+                                <CheckCheck size={14} />
+                            )}
                             {status === "read" && (
                                 <CheckCheck
                                     size={14}
@@ -190,6 +218,7 @@ function MessageBubble({ msg, onRetryMessage }) {
         </div>
     );
 }
+
 
 /* ---------------------------------------------------
        MAIN CHAT LAYOUT

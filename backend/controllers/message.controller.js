@@ -29,6 +29,7 @@ function emitAck(convId, msg, clientId) {
     mediaType: msg.mediaType || null,
     mimeType: msg.mimeType || null,
     senderType: "agent",
+    senderName: msg.senderName,
     createdAt: msg.createdAt,
     status: msg.status,
     msgId: msg.msgId,
@@ -52,6 +53,7 @@ function emitNewMessage(conv, msg) {
       mediaType: msg.mediaType || null,
       mimeType: msg.mimeType || null,
       senderType: msg.senderType,
+      senderName: msg.senderName,
       createdAt: msg.createdAt,
       status: msg.status,
       msgId: msg.msgId,
@@ -60,7 +62,6 @@ function emitNewMessage(conv, msg) {
 }
 
 // ---------- send text (business -> customer) ----------
-
 export async function sendTextController(req, res) {
   try {
     const { conversationId, to, body, clientId } = req.body;
@@ -69,17 +70,13 @@ export async function sendTextController(req, res) {
 
     if (conversationId) {
       conv = await Conversation.findById(conversationId);
-      if (!conv)
-        return res.status(404).json({ error: "Conversation not found" });
+      if (!conv) return res.status(404).json({ error: "Conversation not found" });
       targetPhone = conv.phone;
     } else if (!targetPhone) {
-      return res
-        .status(400)
-        .json({ error: "Provide conversationId or to phone" });
+      return res.status(400).json({ error: "Provide conversationId or to phone" });
     }
 
-    if (!conv)
-      conv = await findOrCreateConversationByPhone(targetPhone);
+    if (!conv) conv = await findOrCreateConversationByPhone(targetPhone);
 
     const metaRes = await sendText(targetPhone, body);
     const waId = metaRes?.data?.messages?.[0]?.id || null;
@@ -89,6 +86,7 @@ export async function sendTextController(req, res) {
       from: "business",
       to: targetPhone,
       senderType: "agent",
+      senderName: req.user.name,   // 🔥 NEW
       body,
       status: "sent",
       msgId: waId,
@@ -100,13 +98,13 @@ export async function sendTextController(req, res) {
     await conv.save();
 
     emitAck(conv._id, msg, clientId);
-
     return res.json({ ok: true, message: msg });
   } catch (err) {
     console.error("sendTextController error:", err);
     return res.status(500).json({ error: "Failed to send message" });
   }
 }
+
 
 // ---------- send image (URL-based) ----------
 
