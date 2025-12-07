@@ -813,6 +813,7 @@ const WhatsAppDashboard = () => {
                 unread: c.unreadCount || c.unread || 0,
                 initials: (c.name || c.phone || "?").slice(0, 2).toUpperCase(),
                 contactStatus: c.contactStatus,
+                tag: c.tag || "بدون",
             })),
         [filteredConversations]
     );
