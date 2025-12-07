@@ -5,28 +5,29 @@ import {
   BarChart3,
   Users,
   Settings,
-  UserCog, // NEW ICON
+  UserCog,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
-// WhatsApp-inspired, premium color palette
+// ألوان مستوحاة من واتساب
 const moduleColors = {
   chats: "bg-[#DCFCE7] text-[#16A34A]",
   broadcast: "bg-[#E0F2FE] text-[#0284C7]",
   analytics: "bg-[#EDE9FE] text-[#6D28D9]",
   contacts: "bg-[#FEF9C3] text-[#CA8A04]",
   settings: "bg-[#F3F4F6] text-[#374151]",
-  agents: "bg-[#FFE4E6] text-[#E11D48]", // NEW
+  agents: "bg-[#FFE4E6] text-[#E11D48]",
 };
 
+// أسماء الوحدات بالعربي
 const modules = [
-  { id: "chats", label: "Chats", icon: MessageSquare },
-  { id: "broadcast", label: "Broadcast", icon: Radio },
-  { id: "analytics", label: "Analytics", icon: BarChart3 },
-  { id: "contacts", label: "Contacts", icon: Users },
-  { id: "agents", label: "Agents", icon: UserCog }, // 🔥 NEW MODULE
-  { id: "settings", label: "Settings", icon: Settings },
+  { id: "chats", label: "المحادثات", icon: MessageSquare },
+  { id: "broadcast", label: "البرودكاست", icon: Radio },
+  { id: "analytics", label: "التحليلات", icon: BarChart3 },
+  { id: "contacts", label: "جهات الاتصال", icon: Users },
+  { id: "agents", label: "الموظفين", icon: UserCog }, 
+  { id: "settings", label: "الإعدادات", icon: Settings },
 ];
 
 export default function ModulesHome({ onSelectModule }) {
@@ -39,20 +40,21 @@ export default function ModulesHome({ onSelectModule }) {
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#F2F3F5] flex flex-col">
+    <div className="min-h-screen w-full bg-[#F2F3F5] flex flex-col" dir="rtl">
 
-      {/* Top Profile Header */}
+      {/* Header */}
       <div className="px-5 py-6 bg-white shadow-sm flex items-center justify-between">
-        
+
         {/* User Info */}
         <div className="flex items-center gap-4">
+
           <div className="w-14 h-14 rounded-full bg-green-500 text-white flex items-center justify-center text-xl font-bold">
-            {user?.fullname?.[0] || "U"}
+            {user?.name?.[0] || "م"}
           </div>
 
           <div className="flex flex-col">
             <h2 className="text-xl font-semibold text-gray-900">
-              {user?.fullname || "User Name"}
+              {user?.name || "اسم المستخدم"}
             </h2>
             <p className="text-sm text-gray-500">
               {user?.email || "user@example.com"}
@@ -60,25 +62,21 @@ export default function ModulesHome({ onSelectModule }) {
           </div>
         </div>
 
-        {/* Logout Button */}
+        {/* Logout */}
         <button
           onClick={() => {
             logout();
             navigate("/login");
           }}
-          className="
-            text-red-600 text-sm font-medium
-            hover:text-red-700 hover:underline
-            transition
-          "
+          className="text-red-600 text-sm font-medium hover:text-red-700 hover:underline transition"
         >
-          Logout
+          تسجيل الخروج
         </button>
       </div>
 
-      {/* Modules Section */}
+      {/* Modules Title */}
       <div className="px-5 pt-6 pb-4 text-gray-900 font-semibold text-lg tracking-tight">
-        Modules
+        الوحدات
       </div>
 
       {/* Modules Grid */}
@@ -104,12 +102,12 @@ export default function ModulesHome({ onSelectModule }) {
               <Icon size={26} className="opacity-90" />
             </div>
 
-            <div className="flex flex-col text-left">
+            <div className="flex flex-col text-right">
               <span className="text-lg font-semibold text-gray-900">
                 {label}
               </span>
               <span className="text-xs text-gray-500">
-                Open {label.toLowerCase()}
+                فتح {label}
               </span>
             </div>
 
