@@ -98,7 +98,7 @@ export function setupSockets(server) {
           conversationId: String(conversationId),
           body: msg.body,
           senderType: "agent",
-          senderName: socket.user.name,   // 🔥 ADDED
+          senderName: msg.senderName,   
           createdAt: msg.createdAt,
           status: msg.status,
           msgId: msg.msgId,
@@ -130,7 +130,7 @@ export function setupSockets(server) {
             body: msg.body,
             mediaUrl: msg.mediaUrl || null,
             senderType: "agent",
-            senderName: socket.user.name,   // 🔥 ADDED
+            senderName: msg.senderName,   // 🔥 ADDED
             createdAt: msg.createdAt,
             status: msg.status,
             msgId: msg.msgId,
