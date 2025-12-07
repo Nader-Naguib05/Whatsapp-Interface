@@ -826,6 +826,7 @@ const WhatsAppDashboard = () => {
                 body: m.text || m.body,
                 timestamp: m.timestamp || m.time || m.createdAt,
                 senderType: m.senderType || m.sender,
+                senderName: m.senderName || "Agent",
                 fromMe: m.fromMe,
                 from: m.from,
                 status: m.status || "sent",
