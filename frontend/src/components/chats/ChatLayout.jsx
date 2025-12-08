@@ -60,15 +60,18 @@ function getMessageKey(msg, idx) {
 }
 
 /* ---------------------------------------------------
-   MESSAGE BUBBLE (FULL UPDATED VERSION)
+   MESSAGE BUBBLE — FINAL FULL VERSION
+   Supports incoming + outgoing media correctly
 --------------------------------------------------- */
+
 function MessageBubble({ msg, onRetryMessage }) {
     const senderType = msg.senderType || msg.sender || msg.role;
     const timestamp = msg.timestamp || msg.time || msg.createdAt;
 
     const mediaType = msg.mediaType || "";
     const mediaUrl = msg.mediaUrl || null;
-    const text = msg.text || msg.body || "";
+
+    const text = msg.text || msg.body || msg.caption || "";
     const status = msg.status || "sent";
 
     const isOutgoing =
@@ -76,22 +79,41 @@ function MessageBubble({ msg, onRetryMessage }) {
         msg.from === "business" ||
         msg.fromMe === true;
 
-    const isSending = status === "sending" || status.startsWith("uploading-");
+    const isSending = status === "sending" || status?.startsWith("uploading-");
     const isFailed = status === "failed";
 
-    const isImage = mediaType?.startsWith("image/");
-    const isVideo = mediaType?.startsWith("video/");
-    const isAudio = mediaType?.startsWith("audio/");
-    const isDocument = mediaUrl && !isImage && !isVideo && !isAudio;
+    /* ---------------------------------------------------
+       FIXED MEDIA DETECTION (incoming + outgoing)
+       incoming: "image" | "video" | "audio" | "document"
+       outgoing: "image/jpeg" | "video/mp4" etc
+    --------------------------------------------------- */
+    const normalizedType = mediaType?.toLowerCase();
+
+    const isImage =
+        normalizedType === "image" || normalizedType?.startsWith("image/");
+    const isVideo =
+        normalizedType === "video" || normalizedType?.startsWith("video/");
+    const isAudio =
+        normalizedType === "audio" || normalizedType?.startsWith("audio/");
+    const isDocument =
+        mediaUrl &&
+        (normalizedType === "document" ||
+            (!isImage && !isVideo && !isAudio));
 
     /* -------------------------------------------
        NEW: Display actual sender name
-       - Agent messages → show agent's name
-       - Customer messages → show "Customer"
     ------------------------------------------- */
     const displayedName = isOutgoing
         ? msg.senderName || msg.agentName || "Agent"
         : msg.customerName || "Customer";
+
+    /* -------------------------------------------
+       EXTRACT DOCUMENT FILENAME
+    ------------------------------------------- */
+    const fileName =
+        msg.fileName ||
+        msg.filename ||
+        (mediaUrl ? mediaUrl.split("/").pop() : "File");
 
     return (
         <div
@@ -110,7 +132,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                         : "wa-message-bubble--incoming")
                 }
             >
-                {/* NEW: Sender name label */}
+                {/* Sender label */}
                 <div
                     style={{
                         fontSize: "11px",
@@ -137,6 +159,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                                 src={mediaUrl}
                                 className="wa-media-img"
                                 draggable={false}
+                                loading="lazy"
                             />
                         )}
 
@@ -146,7 +169,7 @@ function MessageBubble({ msg, onRetryMessage }) {
                                 controls
                                 className="wa-media-video"
                                 draggable={false}
-                            ></video>
+                            />
                         )}
 
                         {isAudio && (
@@ -164,24 +187,24 @@ function MessageBubble({ msg, onRetryMessage }) {
                                 rel="noreferrer"
                                 className="wa-media-file-card"
                             >
-                                <FileText size={22} />
+                                <FileText size={20} />
                                 <span
                                     style={{
                                         fontSize: 13,
                                         marginLeft: 8,
                                     }}
                                 >
-                                    File
+                                    {fileName}
                                 </span>
                             </a>
                         )}
                     </div>
                 )}
 
-                {/* TEXT */}
+                {/* TEXT / CAPTION */}
                 {text && <div className="wa-message-text">{text}</div>}
 
-                {/* META (time + ticks) */}
+                {/* META */}
                 <div className="wa-message-meta" title={timestamp}>
                     <span className="wa-message-time">
                         {formatTime(timestamp)}
@@ -215,6 +238,7 @@ function MessageBubble({ msg, onRetryMessage }) {
         </div>
     );
 }
+
 
 /* ---------------------------------------------------
        MAIN CHAT LAYOUT

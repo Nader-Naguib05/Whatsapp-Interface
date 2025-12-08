@@ -1,16 +1,5 @@
-// src/pages/WhatsAppDashboard.jsx
 import React, { useState, useEffect, useMemo, useRef, useReducer } from "react";
-const BACKEND = import.meta.env.VITE_API_URL;
-
-import Sidebar from "../components/layout/Sidebar";
-import BroadcastView from "../components/broadcast/BroadcastView";
-import AnalyticsView from "../components/analytics/AnalyticsView";
-import ContactsView from "../components/contacts/ContactsView";
-import SettingsView from "../components/settings/SettingsView";
 import ChatLayout from "../components/chats/ChatLayout";
-
-import { ANALYTICS_STATS, MESSAGE_VOLUME, maxVolume } from "../data/mockData";
-
 import {
     getConversations,
     getConversationMessages,
@@ -20,6 +9,7 @@ import { createSocket } from "../lib/socket";
 import api from "../api/axios";
 
 const PAGE_SIZE = 40;
+const BACKEND = import.meta.env.VITE_API_URL;
 
 // Normalize phone so +2010..., 010..., spaces, etc. all resolve to same key
 const normalizePhone = (phone) => (phone || "").toString().replace(/\D/g, "");
@@ -499,21 +489,40 @@ const WhatsAppDashboard = () => {
             const convId = String(conversation._id || conversation.id);
             const senderType = raw.senderType || raw.sender || "customer";
 
+            const text =
+                raw.text ||
+                raw.caption ||
+                raw.body ||
+                (raw.mediaType ? `[${raw.mediaType}]` : "");
+
             const uiMsg = {
                 id: raw._id,
                 clientId: raw.clientId || undefined,
                 conversationId: convId,
-                text: raw.body,
-                body: raw.body,
-                mediaUrl: raw.mediaUrl,
+
+                text,
+                body: text,
+
+                // MEDIA SUPPORT FIX
+                mediaUrl: raw.mediaUrl || null,
+                mediaType: raw.mediaType || null,
+                mimeType: raw.mimeType || null,
+                mediaId: raw.mediaId || null,
+                fileName: raw.fileName || raw.filename || null,
+
                 senderType,
-                senderName: raw.senderName,
+                senderName:
+                    raw.senderName ||
+                    (senderType === "agent" ? "Agent" : "Customer"),
+
                 fromMe: senderType === "agent",
                 from: senderType === "agent" ? "business" : "customer",
-                timestamp: raw.createdAt,
+
+                timestamp: raw.createdAt || raw.timestamp,
                 status:
                     raw.status ||
                     (senderType === "agent" ? "sent" : "received"),
+
                 msgId: raw.msgId,
             };
 
@@ -562,19 +571,36 @@ const WhatsAppDashboard = () => {
             const clientId = serverMsg.clientId;
             if (!convId || !clientId) return;
 
+            const text =
+                serverMsg.text ||
+                serverMsg.caption ||
+                serverMsg.body ||
+                (serverMsg.mediaType ? `[${serverMsg.mediaType}]` : "");
+
             const uiMsg = {
                 id: serverMsg._id,
                 clientId,
                 conversationId: convId,
-                text: serverMsg.body,
-                body: serverMsg.body,
-                mediaUrl: serverMsg.mediaUrl,
+
+                text,
+                body: text,
+
+                // MEDIA FIX
+                mediaUrl: serverMsg.mediaUrl || null,
+                mediaType: serverMsg.mediaType || null,
+                mimeType: serverMsg.mimeType || null,
+                mediaId: serverMsg.mediaId || null,
+                fileName: serverMsg.fileName || serverMsg.filename || null,
+
                 senderType: serverMsg.senderType || "agent",
-                senderName: serverMsg.senderName,
+                senderName: serverMsg.senderName || "Agent",
+
                 fromMe: true,
                 from: "business",
+
                 timestamp: serverMsg.createdAt,
                 status: serverMsg.status || "sent",
+
                 msgId: serverMsg.msgId,
             };
 
@@ -821,22 +847,46 @@ const WhatsAppDashboard = () => {
 
     const layoutMessages = useMemo(
         () =>
-            activeMessages.map((m) => ({
-                id: m.id || m._id,
-                clientId: m.clientId,
-                text: m.text || m.body,
-                body: m.text || m.body,
-                timestamp: m.timestamp || m.time || m.createdAt,
-                senderType: m.senderType || m.sender,
-                senderName: m.senderName || "Agent",
-                fromMe: m.fromMe,
-                from: m.from,
-                status: m.status || "sent",
-                mediaUrl: m.mediaUrl,
-                mediaType: m.mediaType,
-                msgId: m.msgId,
-                fileName: m.fileName || m.filename,
-            })),
+            activeMessages.map((m) => {
+                const text =
+                    m.text ||
+                    m.caption ||
+                    m.body ||
+                    (m.mediaType ? `[${m.mediaType}]` : "");
+
+                return {
+                    id: m.id || m._id,
+                    clientId: m.clientId,
+
+                    // text + caption unified
+                    text,
+                    body: text,
+
+                    timestamp: m.timestamp || m.time || m.createdAt,
+
+                    // sender normalization
+                    senderType: m.senderType || m.sender || "customer",
+                    senderName:
+                        m.senderName ||
+                        (m.senderType === "agent" ? "Agent" : "Customer"),
+
+                    fromMe: m.fromMe,
+                    from: m.from,
+
+                    status: m.status || "sent",
+
+                    // media
+                    mediaUrl: m.mediaUrl || null,
+                    mediaType: m.mediaType || null,
+                    mimeType: m.mimeType || null,
+                    mediaId: m.mediaId || null,
+
+                    // document filename
+                    fileName: m.fileName || m.filename,
+
+                    msgId: m.msgId,
+                };
+            }),
         [activeMessages]
     );
 

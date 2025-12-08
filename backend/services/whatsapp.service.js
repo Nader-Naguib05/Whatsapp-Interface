@@ -114,7 +114,7 @@ export function parseIncoming(body) {
     // --- incoming messages ---
     if (value.messages) {
       for (const m of value.messages) {
-        out.push({
+        const ev = {
           event: "message",
           msgId: m.id,
           from: m.from,
@@ -122,8 +122,43 @@ export function parseIncoming(body) {
           timestamp: m.timestamp,
           type: m.type,
           text: m.text?.body ?? null,
-          raw: m
-        });
+          raw: m,
+        };
+
+        // ------ MEDIA EXTRACTION ------
+        if (m.type === "image" && m.image) {
+          ev.mediaType = "image";
+          ev.mimeType = m.image.mime_type;
+          ev.mediaId = m.image.id;
+          ev.mediaUrl = `${process.env.BASE_URL}/media/${m.image.id}`;
+          ev.caption = m.image.caption || null;
+        }
+
+        if (m.type === "video" && m.video) {
+          ev.mediaType = "video";
+          ev.mimeType = m.video.mime_type;
+          ev.mediaId = m.video.id;
+          ev.mediaUrl = `${process.env.BASE_URL}/media/${m.video.id}`;
+          ev.caption = m.video.caption || null;
+        }
+
+        if (m.type === "audio" && m.audio) {
+          ev.mediaType = "audio";
+          ev.mimeType = m.audio.mime_type;
+          ev.mediaId = m.audio.id;
+          ev.mediaUrl = `${process.env.BASE_URL}/media/${m.audio.id}`;
+        }
+
+        if (m.type === "document" && m.document) {
+          ev.mediaType = "document";
+          ev.mimeType = m.document.mime_type;
+          ev.mediaId = m.document.id;
+          ev.mediaUrl = `${process.env.BASE_URL}/media/${m.document.id}`;
+          ev.caption = m.document.caption || null;
+        }
+
+        // Push final event
+        out.push(ev);
       }
     }
 
@@ -135,7 +170,7 @@ export function parseIncoming(body) {
           status: s.status,
           messageId: s.id,
           timestamp: s.timestamp,
-          raw: s
+          raw: s,
         });
       }
     }
