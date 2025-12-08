@@ -125,6 +125,19 @@ function reducer(state, action) {
             };
         }
 
+        case "UPSERT_CONVERSATION": {
+            const { conversationId, patch } = action.payload;
+
+            return {
+                ...state,
+                conversations: state.conversations.map((c) =>
+                    String(c._id) === String(conversationId)
+                        ? { ...c, ...patch }
+                        : c
+                ),
+            };
+        }
+
         case "UPSERT_MESSAGE": {
             const { conversationId, msg } = action.payload;
             const prev = state.messagesByConv[conversationId] || [];
@@ -1230,7 +1243,9 @@ const WhatsAppDashboard = () => {
                                 onSelectConversation={(id) => {
                                     handleSelectConversation(id);
                                 }}
-                                onUpdateConversationField={updateConversationField}
+                                onUpdateConversationField={
+                                    updateConversationField
+                                }
                                 messages={layoutMessages}
                                 onSendMessage={handleSend}
                                 composerValue={composerValue}
@@ -1276,7 +1291,9 @@ const WhatsAppDashboard = () => {
                                 conversations={layoutConversations}
                                 activeConversationId={activeConversationId}
                                 onSelectConversation={handleSelectConversation}
-                                onUpdateConversationField={updateConversationField}
+                                onUpdateConversationField={
+                                    updateConversationField
+                                }
                                 messages={layoutMessages}
                                 onSendMessage={handleSend}
                                 composerValue={composerValue}
