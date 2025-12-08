@@ -502,6 +502,7 @@ const WhatsAppDashboard = () => {
 
                 text,
                 body: text,
+                caption: raw.caption || null,
 
                 // MEDIA SUPPORT FIX
                 mediaUrl: raw.mediaUrl || null,
@@ -850,40 +851,32 @@ const WhatsAppDashboard = () => {
             activeMessages.map((m) => {
                 const text =
                     m.text ||
-                    m.caption ||
+                    m.caption || // <-- FIX
                     m.body ||
                     (m.mediaType ? `[${m.mediaType}]` : "");
 
                 return {
                     id: m.id || m._id,
-                    clientId: m.clientId,
 
-                    // text + caption unified
                     text,
                     body: text,
+                    caption: m.caption || null, // <-- FIX
+
+                    mediaUrl: m.mediaUrl,
+                    mediaType: m.mediaType,
+                    mimeType: m.mimeType,
+                    mediaId: m.mediaId,
+                    fileName: m.fileName,
 
                     timestamp: m.timestamp || m.time || m.createdAt,
 
-                    // sender normalization
-                    senderType: m.senderType || m.sender || "customer",
-                    senderName:
-                        m.senderName ||
-                        (m.senderType === "agent" ? "Agent" : "Customer"),
+                    senderType: m.senderType,
+                    senderName: m.senderName || "Customer",
 
                     fromMe: m.fromMe,
                     from: m.from,
 
-                    status: m.status || "sent",
-
-                    // media
-                    mediaUrl: m.mediaUrl || null,
-                    mediaType: m.mediaType || null,
-                    mimeType: m.mimeType || null,
-                    mediaId: m.mediaId || null,
-
-                    // document filename
-                    fileName: m.fileName || m.filename,
-
+                    status: m.status,
                     msgId: m.msgId,
                 };
             }),
