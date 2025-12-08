@@ -107,6 +107,7 @@ export async function markAsRead(messageId) {
 }
 
 // ---------- PARSE INCOMING ----------
+// ---------- PARSE INCOMING ----------
 export function parseIncoming(body) {
     const entry = body.entry?.[0];
     if (!entry?.changes) return [];
@@ -130,7 +131,9 @@ export function parseIncoming(body) {
                     raw: m,
                 };
 
-                // ------ MEDIA EXTRACTION ------
+                /* ------------------------------------------
+                   IMAGE
+                ------------------------------------------ */
                 if (m.type === "image" && m.image) {
                     ev.mediaType = "image";
                     ev.mimeType = m.image.mime_type;
@@ -138,11 +141,14 @@ export function parseIncoming(body) {
                     ev.mediaUrl = `${process.env.BASE_URL}/media/${m.image.id}`;
                     ev.caption = m.image.caption || null;
 
-                    // FIX: image caption as text
-                    ev.text = m.image.caption || null;
-                    ev.body = m.image.caption || "[image]";
+                    // override text for media
+                    ev.body = "[image]";
+                    if (ev.caption) ev.text = ev.caption;
                 }
 
+                /* ------------------------------------------
+                   VIDEO
+                ------------------------------------------ */
                 if (m.type === "video" && m.video) {
                     ev.mediaType = "video";
                     ev.mimeType = m.video.mime_type;
@@ -150,11 +156,13 @@ export function parseIncoming(body) {
                     ev.mediaUrl = `${process.env.BASE_URL}/media/${m.video.id}`;
                     ev.caption = m.video.caption || null;
 
-                    // FIX: video caption as text
-                    ev.text = m.video.caption || null;
-                    ev.body = m.video.caption || "[video]";
+                    ev.body = "[video]";
+                    if (ev.caption) ev.text = ev.caption;
                 }
 
+                /* ------------------------------------------
+                   DOCUMENT
+                ------------------------------------------ */
                 if (m.type === "document" && m.document) {
                     ev.mediaType = "document";
                     ev.mimeType = m.document.mime_type;
@@ -162,15 +170,81 @@ export function parseIncoming(body) {
                     ev.mediaUrl = `${process.env.BASE_URL}/media/${m.document.id}`;
                     ev.caption = m.document.caption || null;
 
-                    // FIX: doc caption as text
-                    ev.text = m.document.caption || m.document.filename || null;
-                    ev.body =
-                        m.document.caption ||
-                        m.document.filename ||
-                        "[document]";
+                    ev.body = "[document]";
+                    if (ev.caption) ev.text = ev.caption;
                 }
 
-                // Push final event
+                /* ------------------------------------------
+                   AUDIO (Voice Notes)
+                ------------------------------------------ */
+                if (m.type === "audio" && m.audio) {
+                    ev.mediaType = "audio";
+                    ev.mimeType = m.audio.mime_type || "audio/ogg";
+                    ev.mediaId = m.audio.id;
+                    ev.mediaUrl = `${process.env.BASE_URL}/media/${m.audio.id}`;
+                    ev.isVoice = m.audio.voice || false;
+
+                    ev.body = "[audio]";
+                    ev.text = null; // always null for voice messages
+                }
+
+                /* ------------------------------------------
+                   STICKER
+                ------------------------------------------ */
+                if (m.type === "sticker" && m.sticker) {
+                    ev.mediaType = "sticker";
+                    ev.mimeType = m.sticker.mime_type;
+                    ev.mediaId = m.sticker.id;
+                    ev.mediaUrl = `${process.env.BASE_URL}/media/${m.sticker.id}`;
+
+                    ev.body = "[sticker]";
+                    ev.text = null;
+                }
+
+                /* ------------------------------------------
+                   LOCATION
+                ------------------------------------------ */
+                if (m.type === "location" && m.location) {
+                    ev.mediaType = "location";
+                    ev.body = "[location]";
+
+                    ev.location = {
+                        lat: m.location.latitude,
+                        lng: m.location.longitude,
+                        name: m.location.name,
+                        address: m.location.address,
+                    };
+                }
+
+                /* ------------------------------------------
+                   CONTACTS (vCard)
+                ------------------------------------------ */
+                if (m.type === "contacts" && m.contacts?.length > 0) {
+                    ev.mediaType = "contacts";
+                    ev.body = "[contact]";
+                    ev.contacts = m.contacts; // keep raw contact list
+                }
+
+                /* ------------------------------------------
+                   REACTIONS (WhatsApp reactions like ❤️ 👍)
+                ------------------------------------------ */
+                if (m.type === "reaction" && m.reaction) {
+                    ev.event = "reaction";
+                    ev.reaction = {
+                        emoji: m.reaction.emoji,
+                        messageId: m.reaction.message_id,
+                    };
+                }
+
+                // Push final parsed event
+                // (skip only if it's truly an empty broken message)
+                const hasText = !!ev.text;
+                const hasMedia = !!ev.mediaUrl;
+
+                if (!hasText && !hasMedia && !ev.location && !ev.contacts && ev.event !== "reaction") {
+                    continue;
+                }
+
                 out.push(ev);
             }
         }
