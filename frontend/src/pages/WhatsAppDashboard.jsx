@@ -417,7 +417,10 @@ const WhatsAppDashboard = () => {
     function updateConversationField(conversationId, updates) {
         dispatch({
             type: "UPSERT_CONVERSATION",
-            payload: { _id: conversationId, ...updates },
+            payload: {
+                conversationId,
+                patch: updates,
+            },
         });
     }
 
