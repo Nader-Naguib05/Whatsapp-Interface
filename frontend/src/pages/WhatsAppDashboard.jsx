@@ -164,7 +164,7 @@ function reducer(state, action) {
             return {
                 ...state,
                 conversations: state.conversations.map((c) =>
-                    String(c.id) === String(conversationId)
+                    String(c._id) === String(conversationId)
                         ? { ...c, ...patch }
                         : c
                 ),
