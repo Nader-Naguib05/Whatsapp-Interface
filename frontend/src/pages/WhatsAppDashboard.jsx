@@ -1049,16 +1049,13 @@ const WhatsAppDashboard = () => {
             formData.append("file", file);
             formData.append("mime", mime);
 
-            const res = await api.post("/messages/uploadMedia", formData, {
+            const res = await axios.post("/messages/uploadMedia", formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
             });
 
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.error);
-
-            const server = json.message;
+            const server = res.data.message;
 
             const uiMsg = {
                 ...optimistic,
