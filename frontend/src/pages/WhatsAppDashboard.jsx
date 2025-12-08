@@ -17,6 +17,7 @@ import {
 } from "../api/conversations";
 
 import { createSocket } from "../lib/socket";
+import api from "../api/axios";
 
 const PAGE_SIZE = 40;
 
@@ -1048,9 +1049,10 @@ const WhatsAppDashboard = () => {
             formData.append("file", file);
             formData.append("mime", mime);
 
-            const res = await fetch(`${BACKEND}/messages/uploadMedia`, {
-                method: "POST",
-                body: formData,
+            const res = await api.post("/messages/uploadMedia", formData, {
+                headers: {
+                    "Content-Type": "multipart/form-data",
+                },
             });
 
             const json = await res.json();
@@ -1095,8 +1097,6 @@ const WhatsAppDashboard = () => {
             });
         }
     };
-
-
 
     // Add to contacts directly from chat header menu
     const handleAddToContacts = async (payload) => {
@@ -1221,7 +1221,6 @@ const WhatsAppDashboard = () => {
             {/* ---------- DESKTOP ---------- */}
             {!isMobile && (
                 <div className="h-full w-full flex">
-
                     <div className="flex-1 min-w-0">
                         {/* tabs */}
                         {activeTab === "chats" && (
@@ -1241,7 +1240,6 @@ const WhatsAppDashboard = () => {
                                 onAttachClick={handleAttachClick}
                                 onFileSelected={handleFileSelected}
                                 fileInputRef={fileInputRef}
-                                
                                 onEmojiClick={() =>
                                     setShowEmojiPicker((v) => !v)
                                 }
@@ -1263,7 +1261,6 @@ const WhatsAppDashboard = () => {
                                 onOpenContactDetails={handleOpenContactDetails}
                             />
                         )}
-                        
                     </div>
                 </div>
             )}
