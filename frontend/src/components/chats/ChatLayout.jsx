@@ -231,6 +231,8 @@ const ChatLayout = ({
     onSendMessage,
 
     onAttachClick,
+    onFileSelected,
+    fileInputRef,
 
     onRetryMessage,
 
@@ -762,7 +764,6 @@ const ChatLayout = ({
                             <div ref={bottomRef} />
                         </div>
 
-                        {/* COMPOSER */}
                         <footer className="wa-chat-composer">
                             <button
                                 className="wa-icon-button"
@@ -770,6 +771,14 @@ const ChatLayout = ({
                             >
                                 <Paperclip size={18} />
                             </button>
+
+                            {/* HIDDEN FILE INPUT */}
+                            <input
+                                type="file"
+                                ref={fileInputRef}
+                                onChange={onFileSelected}
+                                className="hidden"
+                            />
 
                             <textarea
                                 className="wa-composer-input"

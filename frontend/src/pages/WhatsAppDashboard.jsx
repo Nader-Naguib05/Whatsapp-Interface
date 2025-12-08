@@ -1239,6 +1239,9 @@ const WhatsAppDashboard = () => {
                                     })
                                 }
                                 onAttachClick={handleAttachClick}
+                                onFileSelected={handleFileSelected}
+                                fileInputRef={fileInputRef}
+                                
                                 onEmojiClick={() =>
                                     setShowEmojiPicker((v) => !v)
                                 }
