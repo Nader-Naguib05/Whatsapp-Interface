@@ -1049,7 +1049,7 @@ const WhatsAppDashboard = () => {
             formData.append("file", file);
             formData.append("mime", mime);
 
-            const res = await axios.post("/messages/uploadMedia", formData, {
+            const res = await api.post("/messages/uploadMedia", formData, {
                 headers: {
                     "Content-Type": "multipart/form-data",
                 },
