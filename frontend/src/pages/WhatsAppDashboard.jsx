@@ -847,41 +847,42 @@ const WhatsAppDashboard = () => {
     );
 
     const layoutMessages = useMemo(
-        () =>
-            activeMessages.map((m) => {
-                const text =
-                    m.text ||
-                    m.caption || // <-- FIX
-                    m.body ||
-                    (m.mediaType ? `[${m.mediaType}]` : "");
+    () =>
+        activeMessages.map((m) => {
+            const text =
+                m.caption ||                     // FIX: caption takes priority
+                m.text ||                        // then normal text
+                m.body ||                        // fallback
+                (m.mediaType ? `[${m.mediaType}]` : "");
 
-                return {
-                    id: m.id || m._id,
+            return {
+                id: m.id || m._id,
 
-                    text,
-                    body: text,
-                    caption: m.caption || null, // <-- FIX
+                text,
+                body: text,
+                caption: m.caption || null,
 
-                    mediaUrl: m.mediaUrl,
-                    mediaType: m.mediaType,
-                    mimeType: m.mimeType,
-                    mediaId: m.mediaId,
-                    fileName: m.fileName,
+                mediaUrl: m.mediaUrl,
+                mediaType: m.mediaType,
+                mimeType: m.mimeType,
+                mediaId: m.mediaId,
+                fileName: m.fileName,
 
-                    timestamp: m.timestamp || m.time || m.createdAt,
+                timestamp: m.timestamp || m.time || m.createdAt,
 
-                    senderType: m.senderType,
-                    senderName: m.senderName || "Customer",
+                senderType: m.senderType,
+                senderName: m.senderName || "Customer",
 
-                    fromMe: m.fromMe,
-                    from: m.from,
+                fromMe: m.fromMe,
+                from: m.from,
 
-                    status: m.status,
-                    msgId: m.msgId,
-                };
-            }),
-        [activeMessages]
-    );
+                status: m.status,
+                msgId: m.msgId,
+            };
+        }),
+    [activeMessages]
+);
+
 
     const handleSelectConversation = async (convId) => {
         const idStr = String(convId);
