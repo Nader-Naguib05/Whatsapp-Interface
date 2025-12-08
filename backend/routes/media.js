@@ -7,8 +7,8 @@ router.get("/:id", async (req, res) => {
   const mediaId = req.params.id;
 
   try {
-    // Step 1 — fetch metadata (for mime)
-    const metadata = await axios.get(
+    // Step 1 — get metadata (URL, mime)
+    const meta = await axios.get(
       `https://graph.facebook.com/v20.0/${mediaId}`,
       {
         params: { fields: "url,mime_type" },
@@ -18,37 +18,42 @@ router.get("/:id", async (req, res) => {
       }
     );
 
-    const url = metadata.data.url;
-    const mime = metadata.data.mime_type;
+    let url = meta.data.url;
+    const mime = meta.data.mime_type || "application/octet-stream";
 
     if (!url) {
-      return res.status(404).json({ error: "No URL in metadata" });
+      return res.status(404).json({ error: "No URL found in metadata" });
     }
 
-    // Step 2 — fetch CDN binary WITHOUT AUTH HEADERS
-    const file = await axios.get(url, {
-      responseType: "arraybuffer",
+    // Step 2 — handle redirect manually
+    // We MUST disable auto-redirects or Meta CDN drops session credentials.
+    const redirectRes = await axios.get(url, {
+      maxRedirects: 0,
+      validateStatus: (status) => status === 302 || status === 200,
       headers: {
-        Accept: "*/*",   // <- IMPORTANT
+        Authorization: `Bearer ${process.env.META_ACCESS_TOKEN}`,
       },
-      validateStatus: () => true, // avoid axios errors
     });
 
-    // Handle auth errors gracefully
-    if (file.status >= 400) {
-      console.log("CDN error response:", file.data);
-      return res.status(file.status).json({
-        error: true,
-        detail: file.data,
-        note: "CDN rejected request",
-      });
+    // If 302, extract true CDN URL
+    if (redirectRes.status === 302) {
+      url = redirectRes.headers.location;
     }
 
-    res.setHeader("Content-Type", mime || "application/octet-stream");
-    return res.send(Buffer.from(file.data));
+    // Step 3 — fetch actual CDN file
+    const fileRes = await axios.get(url, {
+      responseType: "arraybuffer",
+      headers: {
+        Accept: "*/*",
+      },
+    });
+
+    // Step 4 — send file to browser
+    res.setHeader("Content-Type", mime);
+    return res.send(Buffer.from(fileRes.data));
 
   } catch (err) {
-    console.error("FETCH ERROR:", err.response?.data || err.message);
+    console.error("MEDIA ROUTE ERROR:", err.response?.data || err.message);
     return res.status(500).json({
       error: true,
       detail: err.response?.data || err.message,
