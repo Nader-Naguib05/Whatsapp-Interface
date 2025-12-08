@@ -1,3 +1,4 @@
+// models/message.model.js
 import mongoose from "mongoose";
 
 const MessageSchema = new mongoose.Schema(
@@ -6,61 +7,41 @@ const MessageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Conversation",
       required: true,
+      index: true,              // 🔥 basic index
     },
-
-    // Business → customer or customer → business
     senderType: {
       type: String,
       enum: ["agent", "customer"],
       required: true,
     },
-
     from: String,
     to: String,
-
-    /* --------------------------------------------------
-       TEXT + CAPTION
-    -------------------------------------------------- */
-    body: { type: String, default: "" },     // "[Image]" or text
-    caption: { type: String, default: null }, // actual caption for media
-
-    /* --------------------------------------------------
-       WHATSAPP OFFICIAL MESSAGE ID
-    -------------------------------------------------- */
+    body: { type: String, default: "" },
+    caption: { type: String, default: null },
     msgId: {
       type: String,
       index: true,
     },
-
-    /* --------------------------------------------------
-       MEDIA SUPPORT
-    -------------------------------------------------- */
-    mediaUrl: String,    // our proxy URL: /media/:MEDIA_ID
-    mediaType: String,   // "image" | "video" | "audio" | "document"
-    mimeType: String,    // "image/jpeg", "application/pdf", etc.
-    mediaId: String,     // WhatsApp media ID, essential for fetching
-    fileName: String,    // "invoice.pdf", "photo.jpg"
-
-    /* --------------------------------------------------
-       STATUS: sent, delivered, read, failed, received
-    -------------------------------------------------- */
+    mediaUrl: String,
+    mediaType: String,
+    mimeType: String,
+    mediaId: String,
+    fileName: String,
     status: {
       type: String,
       default: "sent",
     },
-
     senderName: {
       type: String,
       default: null,
     },
-
-    /* --------------------------------------------------
-       RAW META FROM WHATSAPP
-    -------------------------------------------------- */
     meta: Object,
     raw: Object,
   },
   { timestamps: true }
 );
+
+// 🔥 Core index for chat history & pagination
+MessageSchema.index({ conversationId: 1, createdAt: 1 });
 
 export const Message = mongoose.model("Message", MessageSchema);

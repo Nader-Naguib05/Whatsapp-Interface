@@ -14,7 +14,15 @@ import axios from "axios";
 import multer from "multer";
 import FormData from "form-data";
 
-const upload = multer({ storage: multer.memoryStorage() });
+// ------------------------------
+// Multer setup (in-memory, but with size limit)
+// ------------------------------
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB max – protects RAM under load
+  },
+});
 
 // ---------- helpers ----------
 
@@ -61,64 +69,38 @@ function emitNewMessage(conv, msg) {
   });
 }
 
+// Small helper: update conversation last message without hydrating full doc
+async function updateConversationLastMessage(convId, text) {
+  await Conversation.updateOne(
+    { _id: convId },
+    {
+      lastMessage: text,
+      updatedAt: new Date(),
+    }
+  );
+}
+
 // ---------- send text (business -> customer) ----------
 export async function sendTextController(req, res) {
   try {
     const { conversationId, to, body, clientId } = req.body;
-    let conv = null;
-    let targetPhone = to;
 
-    if (conversationId) {
-      conv = await Conversation.findById(conversationId);
-      if (!conv) return res.status(404).json({ error: "Conversation not found" });
-      targetPhone = conv.phone;
-    } else if (!targetPhone) {
-      return res.status(400).json({ error: "Provide conversationId or to phone" });
+    if (!body || typeof body !== "string" || !body.trim()) {
+      return res.status(400).json({ error: "Message body is required" });
     }
 
-    if (!conv) conv = await findOrCreateConversationByPhone(targetPhone);
-
-    const metaRes = await sendText(targetPhone, body);
-    const waId = metaRes?.data?.messages?.[0]?.id || null;
-
-    console.log("req.user", req.user); 
-    const msg = await Message.create({
-      conversationId: conv._id,
-      from: "business",
-      to: targetPhone,
-      senderType: "agent",
-      senderName: req.user.name,   // 🔥 NEW
-      body,
-      status: "sent",
-      msgId: waId,
-      meta: metaRes?.data || {},
-    });
-
-    conv.lastMessage = body;
-    conv.updatedAt = new Date();
-    await conv.save();
-
-    emitAck(conv._id, msg, clientId);
-    return res.json({ ok: true, message: msg });
-  } catch (err) {
-    console.error("sendTextController error:", err);
-    return res.status(500).json({ error: "Failed to send message" });
-  }
-}
-
-
-// ---------- send image (URL-based) ----------
-
-export async function sendImageController(req, res) {
-  try {
-    const { conversationId, to, imageUrl, caption, clientId } = req.body;
     let conv = null;
     let targetPhone = to;
 
     if (conversationId) {
-      conv = await Conversation.findById(conversationId);
-      if (!conv)
+      // only select what we actually need
+      conv = await Conversation.findById(conversationId)
+        .select("_id phone")
+        .lean();
+
+      if (!conv) {
         return res.status(404).json({ error: "Conversation not found" });
+      }
       targetPhone = conv.phone;
     } else if (!targetPhone) {
       return res
@@ -126,8 +108,65 @@ export async function sendImageController(req, res) {
         .json({ error: "Provide conversationId or to phone" });
     }
 
-    if (!conv)
+    if (!conv) {
       conv = await findOrCreateConversationByPhone(targetPhone);
+    }
+
+    const metaRes = await sendText(targetPhone, body);
+    const waId = metaRes?.data?.messages?.[0]?.id || null;
+
+    const msg = await Message.create({
+      conversationId: conv._id,
+      from: "business",
+      to: targetPhone,
+      senderType: "agent",
+      senderName: req.user?.name || null,
+      body,
+      status: "sent",
+      msgId: waId,
+      meta: metaRes?.data || {},
+    });
+
+    await updateConversationLastMessage(conv._id, body);
+
+    emitAck(conv._id, msg, clientId);
+    return res.json({ ok: true, message: msg });
+  } catch (err) {
+    console.error("sendTextController error:", err.response?.data || err);
+    return res.status(500).json({ error: "Failed to send message" });
+  }
+}
+
+// ---------- send image (URL-based) ----------
+export async function sendImageController(req, res) {
+  try {
+    const { conversationId, to, imageUrl, caption, clientId } = req.body;
+
+    if (!imageUrl) {
+      return res.status(400).json({ error: "imageUrl is required" });
+    }
+
+    let conv = null;
+    let targetPhone = to;
+
+    if (conversationId) {
+      conv = await Conversation.findById(conversationId)
+        .select("_id phone")
+        .lean();
+
+      if (!conv) {
+        return res.status(404).json({ error: "Conversation not found" });
+      }
+      targetPhone = conv.phone;
+    } else if (!targetPhone) {
+      return res
+        .status(400)
+        .json({ error: "Provide conversationId or to phone" });
+    }
+
+    if (!conv) {
+      conv = await findOrCreateConversationByPhone(targetPhone);
+    }
 
     const metaRes = await sendImage(targetPhone, imageUrl, caption);
     const waId = metaRes?.data?.messages?.[0]?.id || null;
@@ -137,6 +176,7 @@ export async function sendImageController(req, res) {
       from: "business",
       to: targetPhone,
       senderType: "agent",
+      senderName: req.user?.name || null,
       body: caption || "",
       mediaUrl: imageUrl,
       mediaType: "image",
@@ -145,31 +185,38 @@ export async function sendImageController(req, res) {
       meta: metaRes?.data || {},
     });
 
-    conv.lastMessage = caption || "[image]";
-    conv.updatedAt = new Date();
-    await conv.save();
+    const lastText = caption || "[image]";
+    await updateConversationLastMessage(conv._id, lastText);
 
     emitAck(conv._id, msg, clientId);
 
     return res.json({ ok: true, message: msg });
   } catch (err) {
-    console.error("sendImageController error:", err);
+    console.error("sendImageController error:", err.response?.data || err);
     return res.status(500).json({ error: "Failed to send image" });
   }
 }
 
 // ---------- send document (URL-based) ----------
-
 export async function sendDocumentController(req, res) {
   try {
     const { conversationId, to, fileUrl, filename, clientId } = req.body;
+
+    if (!fileUrl) {
+      return res.status(400).json({ error: "fileUrl is required" });
+    }
+
     let conv = null;
     let targetPhone = to;
 
     if (conversationId) {
-      conv = await Conversation.findById(conversationId);
-      if (!conv)
+      conv = await Conversation.findById(conversationId)
+        .select("_id phone")
+        .lean();
+
+      if (!conv) {
         return res.status(404).json({ error: "Conversation not found" });
+      }
       targetPhone = conv.phone;
     } else if (!targetPhone) {
       return res
@@ -177,18 +224,22 @@ export async function sendDocumentController(req, res) {
         .json({ error: "Provide conversationId or to phone" });
     }
 
-    if (!conv)
+    if (!conv) {
       conv = await findOrCreateConversationByPhone(targetPhone);
+    }
 
     const metaRes = await sendDocument(targetPhone, fileUrl, filename);
     const waId = metaRes?.data?.messages?.[0]?.id || null;
+
+    const body = filename || "[document]";
 
     const msg = await Message.create({
       conversationId: conv._id,
       from: "business",
       to: targetPhone,
       senderType: "agent",
-      body: filename || "[document]",
+      senderName: req.user?.name || null,
+      body,
       mediaUrl: fileUrl,
       mediaType: "document",
       status: "sent",
@@ -196,21 +247,18 @@ export async function sendDocumentController(req, res) {
       meta: metaRes?.data || {},
     });
 
-    conv.lastMessage = filename || "[document]";
-    conv.updatedAt = new Date();
-    await conv.save();
+    await updateConversationLastMessage(conv._id, body);
 
     emitAck(conv._id, msg, clientId);
 
     return res.json({ ok: true, message: msg });
   } catch (err) {
-    console.error("sendDocumentController error:", err);
+    console.error("sendDocumentController error:", err.response?.data || err);
     return res.status(500).json({ error: "Failed to send document" });
   }
 }
 
 // ---------- send template ----------
-
 export async function sendTemplateController(req, res) {
   try {
     const {
@@ -222,13 +270,21 @@ export async function sendTemplateController(req, res) {
       clientId,
     } = req.body;
 
+    if (!templateName) {
+      return res.status(400).json({ error: "templateName is required" });
+    }
+
     let conv = null;
     let targetPhone = to;
 
     if (conversationId) {
-      conv = await Conversation.findById(conversationId);
-      if (!conv)
+      conv = await Conversation.findById(conversationId)
+        .select("_id phone")
+        .lean();
+
+      if (!conv) {
         return res.status(404).json({ error: "Conversation not found" });
+      }
       targetPhone = conv.phone;
     } else if (!targetPhone) {
       return res
@@ -236,8 +292,9 @@ export async function sendTemplateController(req, res) {
         .json({ error: "Provide conversationId or to phone" });
     }
 
-    if (!conv)
+    if (!conv) {
       conv = await findOrCreateConversationByPhone(targetPhone);
+    }
 
     const metaRes = await sendTemplate(
       targetPhone,
@@ -247,49 +304,49 @@ export async function sendTemplateController(req, res) {
     );
     const waId = metaRes?.data?.messages?.[0]?.id || null;
 
+    const body = `Template: ${templateName}`;
+
     const msg = await Message.create({
       conversationId: conv._id,
       from: "business",
       to: targetPhone,
       senderType: "agent",
-      body: `Template: ${templateName}`,
+      senderName: req.user?.name || null,
+      body,
       status: "sent",
       msgId: waId,
       meta: metaRes?.data || {},
     });
 
-    conv.lastMessage = `Template: ${templateName}`;
-    conv.updatedAt = new Date();
-    await conv.save();
+    await updateConversationLastMessage(conv._id, body);
 
     emitAck(conv._id, msg, clientId);
 
     return res.json({ ok: true, message: msg });
   } catch (err) {
-    console.error("sendTemplateController error:", err);
+    console.error("sendTemplateController error:", err.response?.data || err);
     return res.status(500).json({ error: "Failed to send template" });
   }
 }
 
 // ---------- mark as read ----------
-
 export async function markAsReadController(req, res) {
   try {
     const { messageId } = req.body;
-    if (!messageId)
+    if (!messageId) {
       return res.status(400).json({ error: "messageId required" });
+    }
 
     await markAsRead(messageId);
 
     return res.json({ ok: true });
   } catch (err) {
-    console.error("markAsReadController error:", err);
+    console.error("markAsReadController error:", err.response?.data || err);
     return res.status(500).json({ error: "Failed to mark as read" });
   }
 }
 
 // ---------- upload media (file -> buffer -> meta -> send) ----------
-
 export const uploadMediaAndSendController = [
   upload.single("file"),
 
@@ -298,16 +355,22 @@ export const uploadMediaAndSendController = [
       const { conversationId, mime, clientId, caption } = req.body;
       const file = req.file;
 
-      if (!file)
+      if (!file) {
         return res.status(400).json({ error: "No file provided" });
+      }
 
-      if (!conversationId)
+      if (!conversationId) {
         return res.status(400).json({ error: "conversationId required" });
+      }
 
       // Fetch conversation
-      const conv = await Conversation.findById(conversationId);
-      if (!conv)
+      const conv = await Conversation.findById(conversationId)
+        .select("_id phone")
+        .lean();
+
+      if (!conv) {
         return res.status(404).json({ error: "Conversation not found" });
+      }
 
       const targetPhone = conv.phone;
       const mimeType = mime || file.mimetype || "application/octet-stream";
@@ -344,7 +407,7 @@ export const uploadMediaAndSendController = [
       // 2. Determine message type
       // ------------------------------
       let messageType = "document";
-      let msgPayload = {};
+      const msgPayload = {};
 
       if (mimeType.startsWith("image/")) {
         messageType = "image";
@@ -404,6 +467,7 @@ export const uploadMediaAndSendController = [
         from: "business",
         to: targetPhone,
         senderType: "agent",
+        senderName: req.user?.name || null,
         body: displayBody,
         mediaType: messageType,
         mimeType,
@@ -413,9 +477,7 @@ export const uploadMediaAndSendController = [
         meta: sendMsgRes.data,
       });
 
-      conv.lastMessage = displayBody;
-      conv.updatedAt = new Date();
-      await conv.save();
+      await updateConversationLastMessage(conv._id, displayBody);
 
       // ------------------------------
       // 5. Emit real-time ACK to UI
