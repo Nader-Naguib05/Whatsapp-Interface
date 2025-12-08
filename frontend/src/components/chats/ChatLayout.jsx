@@ -450,7 +450,7 @@ const ChatLayout = ({
             const token = localStorage.getItem("token");
 
             await fetch(
-                `${API_URL}/conversations/${activeConversationId}/tag`,
+                `${import.meta.env.VITE_API_URL}/conversations/${activeConversationId}/tag`,
                 {
                     method: "PATCH",
                     headers: {
