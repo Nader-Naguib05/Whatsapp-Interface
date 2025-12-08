@@ -784,7 +784,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   };
 
       return (
-    <div className="flex flex-col h-full bg-slate-50/70 text-right">
+    <div className="flex flex-col h-full bg-slate-50/70 text-right overflow-y-auto">
 
       {/* HEADER */}
       <div className="px-6 pt-5 pb-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-20">
@@ -810,7 +810,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       </div>
 
       {/* MAIN SCROLL AREA */}
-      <div className="flex-1 overflow-y-auto px-4 pb-10">
+      <div className="flex-1 px-4 pb-10">
         <div className="max-w-2xl mx-auto pt-4 flex flex-col h-full">
 
           {/* SEARCH */}
