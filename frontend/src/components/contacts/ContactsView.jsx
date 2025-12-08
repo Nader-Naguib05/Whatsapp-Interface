@@ -784,7 +784,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   };
 
       return (
-    <div className="relative flex flex-col h-full bg-slate-50/70 text-right">
+    <div className="flex flex-col h-full bg-slate-50/70 text-right">
 
       {/* HEADER */}
       <div className="px-6 pt-5 pb-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-20">
