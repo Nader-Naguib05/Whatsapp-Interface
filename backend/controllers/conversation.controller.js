@@ -1,88 +1,147 @@
 // controllers/conversationController.mjs
 import { Conversation } from '../models/conversation.model.js';
 import { Message } from '../models/message.model.js';
-
+// ----------------------------------------------------------
+// GET /conversations
+// Supports BOTH:
+//   - Full unpaginated fetch (OLD)
+//   - Cursor-based pagination (NEW)
+// ----------------------------------------------------------
 export async function listConversations(req, res) {
   try {
-    const limit = Math.min(
-      parseInt(req.query.limit, 10) || 200,
-      500
-    );
+    const limit = Math.min(parseInt(req.query.limit, 10) || 0, 200);
+    const cursor = req.query.cursor ? new Date(req.query.cursor) : null;
 
-    // Optional cursor-based pagination (by updatedAt)
-    const before = req.query.before ? new Date(req.query.before) : null;
-    const query = {};
+    // --------------------------------------------------------
+    // MODE 1: NEW PAGINATED API
+    // --------------------------------------------------------
+    if (limit > 0 || cursor) {
+      const pageSize = limit || 50;
 
-    if (before && !isNaN(before.getTime())) {
-      query.updatedAt = { $lt: before };
+      const query = {};
+
+      // cursor = conversations updated BEFORE this timestamp
+      if (cursor instanceof Date && !isNaN(cursor)) {
+        query.updatedAt = { $lt: cursor };
+      }
+
+      const convs = await Conversation.find(query)
+        .sort({ updatedAt: -1 }) // newest first
+        .limit(pageSize)
+        .select("_id phone name lastMessage lastMessageAt unreadCount tag updatedAt")
+        .lean();
+
+      // determine next cursor
+      const nextCursor =
+        convs.length > 0 ? convs[convs.length - 1].updatedAt : null;
+
+      // check if more conversations exist
+      const hasMore =
+        convs.length === pageSize &&
+        (await Conversation.exists({
+          updatedAt: { $lt: convs[convs.length - 1].updatedAt },
+        }));
+
+      return res.json({
+        conversations: convs,
+        nextCursor,
+        hasMore: Boolean(hasMore),
+      });
     }
 
-    const convs = await Conversation.find(query)
+    // --------------------------------------------------------
+    // MODE 2: LEGACY API (return everything)
+    // --------------------------------------------------------
+    const all = await Conversation.find()
       .sort({ updatedAt: -1 })
-      .limit(limit)
-      .select("phone name lastMessage lastMessageAt unreadCount tag updatedAt")
-      .lean(); 
+      .select("_id phone name lastMessage lastMessageAt unreadCount tag updatedAt")
+      .lean();
 
-    return res.json(convs);
+    return res.json(all);
   } catch (err) {
     console.error("listConversations error:", err);
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 }
 
+// ------------------------------------------
+// GET /conversations/:id
+// Supports BOTH:
+//   - Full fetch (OLD API)
+//   - Paginated fetch (NEW API)
+// ------------------------------------------
 export async function getConversation(req, res) {
   try {
     const { id } = req.params;
 
+    const limit = Math.min(parseInt(req.query.limit, 10) || 0, 200);
+    const cursor = req.query.cursor || null;
+
+    // Always fetch basic conversation info
     const conv = await Conversation.findById(id).lean();
-    if (!conv) return res.status(404).json({ error: "Not found" });
+    if (!conv) return res.status(404).json({ error: "Conversation not found" });
 
-    const limitParam = req.query.limit;
-    const beforeId = req.query.beforeMessageId;
-    const afterId = req.query.afterMessageId;
+    // ------------------------------------------------------------
+    // MODE 1: PAGINATED REQUEST (cursor OR limit passed)
+    // ------------------------------------------------------------
+    if (cursor || limit) {
+      const pageSize = limit || 40;
 
-    let messages = [];
+      const query = { conversationId: id };
 
-    // ✅ LEGACY BEHAVIOR: no pagination params → return all (for now)
-    if (!limitParam && !beforeId && !afterId) {
-      messages = await Message.find({ conversationId: id })
-        .sort({ createdAt: 1 })
+      if (cursor) {
+        // Load messages *before* the cursor
+        const cursorMsg = await Message.findById(cursor)
+          .select("_id createdAt")
+          .lean();
+
+        if (cursorMsg) {
+          query.createdAt = { $lt: cursorMsg.createdAt };
+        }
+      }
+
+      // Fetch newest → oldest for efficiency
+      let msgs = await Message.find(query)
+        .sort({ createdAt: -1 })
+        .limit(pageSize)
         .lean();
-      return res.json({ conversation: conv, messages });
+
+      // Reverse to oldest → newest for UI
+      msgs.reverse();
+
+      // Determine next cursor
+      const nextCursor =
+        msgs.length > 0 ? msgs[0]._id.toString() : null;
+
+      // Does conversation have more?
+      const hasMore =
+        msgs.length === pageSize &&
+        (await Message.exists({
+          conversationId: id,
+          createdAt: { $lt: msgs[0].createdAt },
+        }));
+
+      return res.json({
+        messages: msgs,
+        nextCursor,
+        hasMore: Boolean(hasMore),
+      });
     }
 
-    // ✅ SCALABLE PATH (use this in new frontend calls)
-    const limit = Math.min(parseInt(limitParam, 10) || 50, 200);
-    const query = { conversationId: id };
-
-    if (beforeId) {
-      const beforeMsg = await Message.findById(beforeId)
-        .select("createdAt")
-        .lean();
-      if (beforeMsg) {
-        query.createdAt = { $lt: beforeMsg.createdAt };
-      }
-    } else if (afterId) {
-      const afterMsg = await Message.findById(afterId)
-        .select("createdAt")
-        .lean();
-      if (afterMsg) {
-        query.createdAt = { $gt: afterMsg.createdAt };
-      }
-    }
-
-    // We fetch newest→oldest for efficiency then reverse for UI
-    messages = await Message.find(query)
-      .sort({ createdAt: -1 })
-      .limit(limit)
+    // ------------------------------------------------------------
+    // MODE 2: LEGACY REQUEST — return ALL messages
+    // ------------------------------------------------------------
+    const allMessages = await Message.find({ conversationId: id })
+      .sort({ createdAt: 1 })
       .lean();
 
-    messages.reverse();
-
-    return res.json({ conversation: conv, messages });
+    return res.json({
+      conversation: conv,
+      messages: allMessages,
+    });
   } catch (err) {
     console.error("getConversation error:", err);
-    return res.status(500).json({ error: "Server error" });
+    return res.status(500).json({ error: "Internal server error" });
   }
 }
 
