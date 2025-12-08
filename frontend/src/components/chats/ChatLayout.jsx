@@ -97,8 +97,7 @@ function MessageBubble({ msg, onRetryMessage }) {
         normalizedType === "audio" || normalizedType?.startsWith("audio/");
     const isDocument =
         mediaUrl &&
-        (normalizedType === "document" ||
-            (!isImage && !isVideo && !isAudio));
+        (normalizedType === "document" || (!isImage && !isVideo && !isAudio));
 
     /* -------------------------------------------
        NEW: Display actual sender name
@@ -239,7 +238,6 @@ function MessageBubble({ msg, onRetryMessage }) {
     );
 }
 
-
 /* ---------------------------------------------------
        MAIN CHAT LAYOUT
 --------------------------------------------------- */
@@ -248,6 +246,7 @@ const ChatLayout = ({
     activeConversationId,
 
     onSelectConversation,
+    onUpdateConversationField,
     messages = [],
 
     composerValue,
@@ -451,9 +450,7 @@ const ChatLayout = ({
             const token = localStorage.getItem("token");
 
             await fetch(
-                `${
-                    import.meta.env.VITE_API_URL
-                }/conversations/${activeConversationId}/tag`,
+                `${API_URL}/conversations/${activeConversationId}/tag`,
                 {
                     method: "PATCH",
                     headers: {
@@ -464,12 +461,10 @@ const ChatLayout = ({
                 }
             );
 
-            setIsMenuOpen(false);
+            // instantly update frontend state
+            onUpdateConversationField?.(activeConversationId, { tag });
 
-            // Refresh your conversation list
-            if (typeof onSelectConversation === "function") {
-                onSelectConversation(activeConversationId);
-            }
+            setIsMenuOpen(false);
         } catch (err) {
             console.error("Failed to update tag:", err);
         }
