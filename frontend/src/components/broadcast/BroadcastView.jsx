@@ -126,7 +126,7 @@ const BroadcastView = () => {
     } catch (err) {
       setBatchesError(
         err?.response?.data?.error ||
-          "فشل تحميل سجل البرودكاست. برجاء إعادة المحاولة."
+          "فشل تحميل سجل الحملة. برجاء إعادة المحاولة."
       );
     } finally {
       setLoadingBatches(false);
@@ -146,7 +146,7 @@ const BroadcastView = () => {
     } catch (err) {
       setBatchDetailsError(
         err?.response?.data?.error ||
-          "فشل تحميل تفاصيل البرودكاست. برجاء إعادة المحاولة."
+          "فشل تحميل تفاصيل الحملة. برجاء إعادة المحاولة."
       );
     } finally {
       setLoadingBatchDetails(false);
@@ -298,7 +298,7 @@ const BroadcastView = () => {
       );
 
       const { batchId } = res.data || {};
-      setSendSuccess("تم جدولة البرودكاست بنجاح.");
+      setSendSuccess("تم جدولة الحملة بنجاح.");
       setSelectedBatchId(batchId || null);
 
       resetFileState();
@@ -308,7 +308,7 @@ const BroadcastView = () => {
     } catch (err) {
       setSendError(
         err?.response?.data?.error ||
-          "فشل بدء البرودكاست. تأكد من القالب وملف الـ CSV."
+          "فشل بدء الحملة. تأكد من القالب وملف الـ CSV."
       );
     } finally {
       setIsSending(false);
@@ -346,7 +346,7 @@ const BroadcastView = () => {
               <span className="inline-flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100">
                 <Send className="w-4 h-4 text-emerald-600" />
               </span>
-              رسائل البرودكاست
+              رسائل الحملات الاعلانية
             </h2>
             <p className="text-sm text-gray-600 max-w-xl text-right">
               ارفع ملف CSV لعملائك، اختر قالب واتساب معتمد، وابعث آلاف الرسائل
@@ -381,7 +381,7 @@ const BroadcastView = () => {
               </div>
               <div className="text-right">
                 <h3 className="font-semibold text-emerald-900">
-                  برودكاست آمن لكل عميل على حدة
+                  بث آمن لكل عميل على حدة
                 </h3>
                 <p className="text-xs text-emerald-700 mt-1">
                   كل عميل يستلم رسالة منفصلة، ولا يرى بقية المستلمين. الإرسال
@@ -404,7 +404,7 @@ const BroadcastView = () => {
               />
               <p className="text-[11px] text-gray-500 text-right">
                 هذا الاسم لا يظهر للعميل، فقط لمساعدتك في تمييز الحملة في سجل
-                البرودكاست.
+                الحملات الاعلانية.
               </p>
             </div>
 
@@ -448,7 +448,7 @@ const BroadcastView = () => {
                 </label>
                 <Textarea
                   rows={3}
-                  placeholder='مثال: [{"type":"body","parameters":[{"type":"text","text":"نادر"}]}]'
+                  placeholder='مثال: [{"type":"body","parameters":[{"type":"text","text":"شيء"}]}]'
                   value={componentsRaw}
                   onChange={handleInputChange(setComponentsRaw)}
                   className="text-xs text-right font-mono"
@@ -553,10 +553,10 @@ const BroadcastView = () => {
                 {isSending ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    جاري جدولة البرودكاست...
+                    جاري جدولة الحملة...
                   </>
                 ) : (
-                  "بدء إرسال البرودكاست"
+                  "بدء إرسال الحملة"
                 )}
               </Button>
 
@@ -582,7 +582,7 @@ const BroadcastView = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <Activity className="w-4 h-4 text-emerald-600" />
-                  البرودكاست النشطة
+                  الحملات النشطة
                 </h3>
                 {loadingBatches && (
                   <span className="text-[11px] text-gray-500 flex items-center gap-1">
@@ -601,7 +601,7 @@ const BroadcastView = () => {
 
               {activeBatches.length === 0 && (
                 <p className="text-xs text-gray-500 text-right">
-                  لا توجد برودكاست نشطة حاليًا. ابدأ واحدة جديدة من اليمين.
+                  لا توجد حملات نشطة حاليًا. ابدأ واحدة جديدة من اليمين.
                 </p>
               )}
 
@@ -675,13 +675,13 @@ const BroadcastView = () => {
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-600" />
-                  آخر البرودكاست
+                  آخر الحملات
                 </h3>
               </div>
 
               {completedBatches.length === 0 && (
                 <p className="text-xs text-gray-500 text-right">
-                  لا توجد برودكاست مكتملة بعد.
+                  لا توجدحملة مكتملة بعد.
                 </p>
               )}
 
@@ -774,7 +774,7 @@ const BroadcastView = () => {
             <div className="bg-white/95 backdrop-blur border border-gray-200 rounded-2xl p-4 shadow-sm">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold text-gray-900">
-                  تفاصيل البرودكاست
+                  تفاصيل الحملة
                 </h3>
                 {loadingBatchDetails && selectedBatchId && (
                   <span className="text-[11px] text-gray-500 flex items-center gap-1">
@@ -793,7 +793,7 @@ const BroadcastView = () => {
 
               {!selectedBatch && !selectedBatchId && (
                 <p className="text-xs text-gray-500 text-right">
-                  اختر برودكاست من القائمة لعرض تفاصيله وإحصاءاته.
+                  اختر حملة من القائمة لعرض تفاصيله وإحصاءاته.
                 </p>
               )}
 
