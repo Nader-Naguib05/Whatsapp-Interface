@@ -247,27 +247,27 @@ export const getDashboardAnalytics = async (req, res) => {
     // ----- BUILD OVERVIEW CARDS -----
     const overviewStats = [
       {
-        label: "Total Conversations",
+        label: "إجمالي المحادثات",
         value: totalConversations,
-        helperText: "All-time conversations",
+        helperText: "المحادثات في كل الأوقات",
         tone: "primary",
       },
       {
-        label: "Active in Last 24h",
+        label: "محادثات نشطة اخر 24 ساعة",
         value: activeConversationsLast24h,
-        helperText: "Customers engaged today",
+        helperText: "عدد العملاء النشطة",
         tone: "success",
       },
       {
-        label: "Total Messages",
+        label: "إجمالي الرسائل",
         value: totalMessages,
-        helperText: "All-time messages",
+        helperText: "الرسائل في كل الأوقات",
         tone: "primary",
       },
       {
-        label: "Broadcast Messages",
+        label: "رسائل الحملات الإعلانية",
         value: totalBroadcastMessages,
-        helperText: "Sent via campaigns",
+        helperText: "إرسلت عن طريق البث",
         tone: "accent",
       },
     ];
