@@ -22,13 +22,49 @@ const moduleColors = {
 
 // أسماء الوحدات بالعربي
 const modules = [
-  { id: "chats", label: "المحادثات", icon: MessageSquare },
-  { id: "broadcast", label: "البرودكاست", icon: Radio },
-  { id: "analytics", label: "التحليلات", icon: BarChart3 },
-  { id: "contacts", label: "جهات الاتصال", icon: Users },
-  { id: "agents", label: "الموظفين", icon: UserCog }, 
-  { id: "settings", label: "الإعدادات", icon: Settings },
+  { 
+    id: "chats", 
+    label: "المحادثات", 
+    desc: "إدارة جميع محادثات العملاء في مكان واحد مع توزيع ذكي على الموظفين ومتابعة فورية للأداء.", 
+    icon: MessageSquare 
+  },
+
+  { 
+    id: "broadcast", 
+    label: "البرودكاست", 
+    desc: "إرسال الحملات والرسائل الجماعية بدقة عالية مع متابعة نتائج الإرسال.", 
+    icon: Radio 
+  },
+
+  { 
+    id: "analytics", 
+    label: "التحليلات", 
+    desc: "إحصائيات واضحة لمتابعة الأداء وفهم تفاعل العملاء.", 
+    icon: BarChart3 
+  },
+
+  { 
+    id: "contacts", 
+    label: "جهات الاتصال", 
+    desc: "تنظيم بيانات العملاء والبحث السريع في الأسماء والأرقام.", 
+    icon: Users 
+  },
+
+  { 
+    id: "agents", 
+    label: "الموظفين", 
+    desc: "إدارة حسابات الموظفين وضبط الصلاحيات ومتابعة النشاط.", 
+    icon: UserCog 
+  },
+
+  { 
+    id: "settings", 
+    label: "الإعدادات", 
+    desc: "التحكم الكامل في إعدادات النظام وتخصيص بيئة العمل.", 
+    icon: Settings 
+  },
 ];
+
 
 export default function ModulesHome({ onSelectModule }) {
   const navigate = useNavigate();
@@ -81,7 +117,7 @@ export default function ModulesHome({ onSelectModule }) {
 
       {/* Modules Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 pt-0">
-        {modules.map(({ id, label, icon: Icon }) => (
+        {modules.map(({ id, label, desc, icon: Icon }) => (
           <button
             key={id}
             onClick={() => goToModule(id)}
@@ -107,7 +143,7 @@ export default function ModulesHome({ onSelectModule }) {
                 {label}
               </span>
               <span className="text-xs text-gray-500">
-                فتح {label}
+                {desc}
               </span>
             </div>
 
