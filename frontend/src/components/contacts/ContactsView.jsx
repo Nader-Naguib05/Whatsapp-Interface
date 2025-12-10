@@ -935,8 +935,9 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                             <StarOff className="w-3.5 h-3.5 text-slate-400" />
                           )}
                         </button>
+                      </div>
 
-                        {/* MENU */}
+                      {/* MENU */}
                         <div className="relative">
                           <button
                             type="button"
@@ -951,7 +952,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
 
                           {openMenuId === c._id && (
                             <div
-                              className="absolute left-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-20 text-right"
+                              className="absolute left-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-50 text-right"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {/* OPEN CHAT */}
@@ -1035,7 +1036,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                             </div>
                           )}
                         </div>
-                      </div>
                     </button>
                   </div>
                 );
