@@ -257,7 +257,7 @@ const ContactDetailsDrawer = ({
       </div>
 
       {/* CONTENT */}
-      <div className="p-5 flex flex-col gap-5 overflow-y-auto flex-1 text-sm">
+      <div className="p-5 flex flex-col gap-5 flex-1 text-sm">
 
         {/* TOP INFO */}
         <div className="flex flex-row-reverse items-center gap-3">
