@@ -811,7 +811,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
 
       {/* MAIN SCROLL AREA */}
       <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-10">
-        <div className="max-w-2xl mx-auto pt-4 flex flex-col h-full">
+        <div className="max-w-2xl mx-auto pt-4 flex flex-col">
 
           {/* SEARCH */}
           <div className="mb-4">
