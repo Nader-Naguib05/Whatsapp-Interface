@@ -784,7 +784,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   };
 
       return (
-    <div className="flex flex-col h-full min-h-0 bg-slate-50/70 text-right overflow-hidden">
+    <div className="flex flex-col h-full min-h-0 bg-slate-50/70 text-right">
 
       {/* HEADER */}
       <div className="px-6 pt-5 pb-3 border-b border-slate-200 bg-white/80 backdrop-blur-sm sticky top-0 z-20">
@@ -810,7 +810,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       </div>
 
       {/* MAIN SCROLL AREA */}
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-10">
+      <div className="flex-1 min-h-0 px-4 pb-10">
         <div className="max-w-2xl mx-auto pt-4 flex flex-col">
 
           {/* SEARCH */}
@@ -935,9 +935,8 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                             <StarOff className="w-3.5 h-3.5 text-slate-400" />
                           )}
                         </button>
-                      </div>
 
-                      {/* MENU */}
+                        {/* MENU */}
                         <div className="relative">
                           <button
                             type="button"
@@ -952,7 +951,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
 
                           {openMenuId === c._id && (
                             <div
-                              className="absolute left-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-50 text-right"
+                              className="absolute left-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-20 text-right"
                               onClick={(e) => e.stopPropagation()}
                             >
                               {/* OPEN CHAT */}
@@ -1036,6 +1035,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                             </div>
                           )}
                         </div>
+                      </div>
                     </button>
                   </div>
                 );
