@@ -17,7 +17,7 @@ import {
   MoreHorizontal,
 } from "lucide-react";
 import { getContacts, createContact, updateContact, deleteContact } from "../../api/contacts";
-import { useLocation } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 const FAVORITES_KEY = "wa_contacts_favorites_v1";
 
@@ -475,7 +475,7 @@ const DuplicateBanner = ({
   );
 };
 
-const ContactsView = ({ onSelectContact, onContactsChange }) => {
+const ContactsView = ({ onContactsChange }) => {
   const location = useLocation();
   const prefill = location.state?.prefill || null;
 
@@ -499,11 +499,16 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   const [copyToast, setCopyToast] = useState("");
   const [openMenuId, setOpenMenuId] = useState(null);
 
-  // مزامنة الكونتاكتس مع الأب (لو فيه callback)
   const syncContacts = (next) => {
     setContacts(next);
     onContactsChange?.(next);
   };
+
+  const navigate = useNavigate();
+
+  const openChat = (phone) => {
+    navigate(`/modules/chats/${phone}`);
+  }
 
   const loadContacts = async (q = "") => {
     try {
@@ -542,12 +547,10 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
     }
   };
 
-  // أول تحميل
   useEffect(() => {
     loadContacts();
   }, []);
 
-  // فتح المودال مع بيانات جاهزة من ChatLayout (prefill)
   useEffect(() => {
     if (prefill) {
       setModalMode("create");
@@ -558,12 +561,10 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
       });
       setShowModal(true);
 
-      // تنظيف الـ state من الـ history
       window.history.replaceState({}, "");
     }
   }, [prefill]);
 
-  // فلترة جهات الاتصال حسب البحث
   const filteredContacts = useMemo(() => {
     if (!query.trim()) return contacts;
 
@@ -587,7 +588,6 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
     });
   }, [contacts, query]);
 
-  // ترتيب جهات الاتصال (المفضلة أولاً ثم الأحدث)
   const sortedContacts = useMemo(() => {
     if (!filteredContacts.length) return filteredContacts;
 
@@ -776,7 +776,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
   };
 
   const handleCardClick = (c) => {
-    if (onSelectContact) onSelectContact(c);
+    openChat(c.phone);
   };
 
   const handleMenuToggle = (id) => {
@@ -954,19 +954,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
                               className="absolute left-0 mt-1 w-44 rounded-xl bg-white border border-slate-200 shadow-lg text-[11px] text-slate-700 z-20 text-right"
                               onClick={(e) => e.stopPropagation()}
                             >
-                              {/* OPEN CHAT */}
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  handleCardClick(c);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full flex flex-row-reverse items-center gap-2 px-3 py-2 hover:bg-slate-50"
-                              >
-                                <MessageCircle className="w-3.5 h-3.5 text-emerald-600" />
-                                فتح المحادثة
-                              </button>
-
+                            
                               {/* CALL */}
                               <button
                                 type="button"
@@ -1078,7 +1066,7 @@ const ContactsView = ({ onSelectContact, onContactsChange }) => {
           contact={detailsContact}
           onClose={closeDetails}
           onOpenChat={() => {
-            if (onSelectContact) onSelectContact(detailsContact);
+            openChat(detailsContact.phone);
             closeDetails();
           }}
           onCopyPhone={() => handleCopyPhone(detailsContact.phone)}

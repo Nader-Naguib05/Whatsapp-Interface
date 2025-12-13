@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useReducer } from "react";
+import { useParams } from "react-router-dom";
 import ChatLayout from "../components/chats/ChatLayout";
 import {
     getConversations,
@@ -234,6 +235,7 @@ const WhatsAppDashboard = () => {
     // contacts state + map
     const [contacts, setContacts] = useState([]);
     const [contactsMap, setContactsMap] = useState({});
+    const { phone } = useParams();
 
     // conversation search, typing, presence, global unread, notifications
     const [conversationSearch, setConversationSearch] = useState("");
@@ -376,6 +378,26 @@ const WhatsAppDashboard = () => {
         loadContacts();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
+
+    useEffect(() => {
+        if (!phone || !conversations.length) return;
+
+        const normalized = normalizePhone(phone);
+
+        const conv = conversations.find((c) => {
+            const cPhone = normalizePhone(c.phone);
+            return cPhone === normalized;
+        });
+
+        if (!conv) return;
+
+        if (String(conv.id) !== String(activeConversationId)) {
+            dispatch({
+                type: "SET_ACTIVE_CONVERSATION",
+                payload: conv.id,
+            });
+        }
+    }, [phone, conversations, activeConversationId]);
 
     // --- socket setup ---
     useEffect(() => {
